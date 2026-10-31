@@ -101,13 +101,22 @@ On `due_date` the buyer pays the current payee the full face value. Funder expos
 
 ### Invoice state machine (buyer node)
 
+```mermaid
+stateDiagram-v2
+    [*] --> APPROVED: PAYMENT_UNDERTAKING issued
+    APPROVED --> PAID_EARLY: ACCEPT of own live offer
+    APPROVED --> ASSIGNED: first valid ASSIGNMENT_NOTICE
+    APPROVED --> SETTLED: due_date, pay supplier
+    ASSIGNED --> SETTLED: due_date, pay funder
+    PAID_EARLY --> PAID_EARLY: ASSIGNMENT_NOTICE rejected
+    ASSIGNED --> ASSIGNED: ASSIGNMENT_NOTICE rejected
+    SETTLED --> SETTLED: ASSIGNMENT_NOTICE rejected
+    PAID_EARLY --> [*]
+    SETTLED --> [*]
 ```
-            ┌──────────── ACCEPT(own offer) ────────────► PAID_EARLY ──► (closed)
-APPROVED ───┤
-            └── ASSIGNMENT_NOTICE (valid, first) ──► ASSIGNED ──► due_date ──► SETTLED
-APPROVED ── due_date ──► SETTLED
-any non-APPROVED state: further ASSIGNMENT_NOTICE → ASSIGNMENT_REJECTED
-```
+
+`PAID_EARLY` is closed: the supplier has already been paid, so nothing is due at maturity. In any state
+other than `APPROVED`, a further `ASSIGNMENT_NOTICE` is answered with `ASSIGNMENT_REJECTED`.
 
 ## 6. Buyer liquidity decision (reference behaviour)
 
