@@ -20,6 +20,7 @@ from .messages import (
     AssignmentRejected,
     EarlyPayRequest,
     Envelope,
+    NOT_ASSIGNED_OR_PLEDGED,
     Invoice,
     InvoiceRejected,
     Offer,
@@ -112,6 +113,7 @@ class BuyerNode(Node):
         self.my_offers: dict[str, Offer] = {}
         self.paid_out: dict[date, int] = {}  # actual outflows by day
         self.discount_income = 0
+        self.equivocate = False  # adversarial: acknowledge every assignment (for demos/tests)
 
     # cash forecast --------------------------------------------------------
 
@@ -268,13 +270,17 @@ class BuyerNode(Node):
             return reject("offer not issued by the notifying funder")
         if offer_env.body.invoice_hash != p.invoice_hash or note.invoice_hash != p.invoice_hash:
             return reject("invoice hash mismatch")
-        if p.status == InvStatus.ASSIGNED:
-            return reject(f"DOUBLE FINANCING: already assigned to {p.payee}")
-        if p.status == InvStatus.PAID_EARLY:
-            return reject("DOUBLE FINANCING: invoice already paid early by buyer")
-        if p.status != InvStatus.APPROVED:
-            return reject(f"invoice is {p.status}")
-        p.status, p.payee = InvStatus.ASSIGNED, note.new_payee_id
+        if not (self.equivocate and p.status == InvStatus.ASSIGNED):
+            if p.status == InvStatus.ASSIGNED:
+                return reject(f"DOUBLE FINANCING: already assigned to {p.payee}")
+            if p.status == InvStatus.PAID_EARLY:
+                return reject("DOUBLE FINANCING: invoice already paid early by buyer")
+            if p.status != InvStatus.APPROVED:
+                return reject(f"invoice is {p.status}")
+        if p.status == InvStatus.ASSIGNED:  # only reachable when equivocating: signs a second ack, ledger unchanged
+            self.decide(note.invoice_id, f"DISHONEST: acknowledged {note.new_payee_id} although already assigned to {p.payee}")
+        else:
+            p.status, p.payee = InvStatus.ASSIGNED, note.new_payee_id
         self.decide(note.invoice_id, f"assignment acknowledged: will pay {note.new_payee_id} {p.invoice.amount/100:,.2f} on {p.invoice.due_date}")
         self.send(
             [note.new_payee_id, p.invoice.supplier_id],
@@ -319,6 +325,7 @@ class FunderNode(Node):
         self.offers: dict[str, tuple[Offer, PaymentUndertaking]] = {}  # firm offers: reserve limit until expiry
         self.pending: dict[str, tuple[Offer, PaymentUndertaking]] = {}  # invoice -> awaiting buyer ack
         self.book: list[tuple[Offer, PaymentUndertaking]] = []  # funded deals
+        self.alarms: list[str] = []  # invoices where the log showed buyer equivocation
 
     def handle(self, env: Envelope) -> None:
         match env.body:
@@ -339,6 +346,8 @@ class FunderNode(Node):
         # the undertaking must be signed by the buyer it names, for the requesting supplier
         if not isinstance(u, PaymentUndertaking) or u_env.sender != u.buyer_id or self.net.directory.role(u.buyer_id) != "buyer" or u.supplier_id != env.sender:
             return self.decide(req.invoice_id, "declined: invalid payment undertaking")
+        if self.net.ack_log.for_invoice(u.invoice_hash):
+            return self.decide(req.invoice_id, "declined: invoice already in the acknowledgment log")
         pay = max(req.requested_date, self.net.today)
         days = (u.due_date - pay).days
         if days < self.policy.min_days:
@@ -367,6 +376,10 @@ class FunderNode(Node):
         o, u = self.offers.pop(offer.offer_id)
         if env.sender != u.supplier_id or o.expires < self.net.today:
             return self.decide(o.invoice_id, "acceptance ignored: wrong sender or expired")
+        if acc.representation != NOT_ASSIGNED_OR_PLEDGED:
+            return self.decide(o.invoice_id, "acceptance declined: missing supplier representation")
+        if self.net.ack_log.for_invoice(u.invoice_hash):
+            return self.decide(o.invoice_id, "acceptance declined: invoice already in the acknowledgment log")
         if self._committed(u.buyer_id) + u.amount > self.policy.limit:  # defensive: offer was reserved
             return self.decide(o.invoice_id, "acceptance declined: limit reached since offer")
         self.exposure[u.buyer_id] = self.exposure.get(u.buyer_id, 0) + u.amount
@@ -381,6 +394,14 @@ class FunderNode(Node):
         if env.sender != u.buyer_id or ack.invoice_hash != u.invoice_hash or ack.amount != u.amount:
             self.exposure[u.buyer_id] -= u.amount
             return self.decide(o.invoice_id, "ack does not match undertaking; not funding")
+        entry = self.net.ack_log.publish(self.identity, env, self.net.today)
+        earlier = self.net.ack_log.conflicts(entry)
+        if earlier:
+            self.exposure[u.buyer_id] -= u.amount
+            self.alarms.append(o.invoice_id)
+            return self.decide(o.invoice_id, f"EQUIVOCATION: buyer already acknowledged {earlier[0].funder_id} "
+                                             f"(log entry #{earlier[0].seq}); not funding")
+        self.decide(o.invoice_id, f"published ack to log (entry #{entry.seq}); no earlier acknowledgment")
         self.book.append((o, u))
         self.decide(o.invoice_id, f"buyer acknowledged; funding {o.advance/100:,.2f}")
         self.send(
@@ -493,5 +514,5 @@ class SupplierNode(Node):
             if self.profile.double_dip:
                 targets += [e for e in valid if e is not best and e.body.kind != OfferKind.BUYER_DISCOUNT]
             for e in targets:
-                self.send([e.sender], Accept(offer=e, supplier_id=self.id))
+                self.send([e.sender], Accept(offer=e, supplier_id=self.id, representation=NOT_ASSIGNED_OR_PLEDGED))
             r.outcome = "accepted"

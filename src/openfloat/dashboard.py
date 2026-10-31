@@ -137,7 +137,8 @@ STEPS = [
     ("The buyer decides where its own cash goes",
      "The buyer's optimiser offers early payment from its own cash only where the discount beats its cash yield **and** its cash stays above the floor on every future day."),
     ("Suppliers accept, and one tries to double-finance",
-     "Each supplier takes the best offer. Supplier B also accepts Bank B's offer, trying to finance the same invoice twice. Watch the buyer's node reject the second claim."),
+     "Each supplier takes the best offer. Supplier B also accepts Bank B's offer, trying to finance the same invoice twice, "
+     "and signs a statement that the invoice is not assigned or pledged elsewhere each time. Watch how the second claim is stopped."),
     ("Someone tampers with a message",
      "An attacker changes the amount on a payment instruction in transit. Every node verifies signatures, so the message is rejected before anyone acts on it."),
     ("Maturity",
@@ -145,7 +146,7 @@ STEPS = [
 ]
 
 
-def new_walkthrough() -> dict:
+def new_walkthrough(dishonest: bool = False) -> dict:
     net = Network(WALK_START)
     buyer = BuyerNode(
         "acme-buyer", net,
@@ -157,7 +158,8 @@ def new_walkthrough() -> dict:
     FunderNode("bank-b", net, FunderPolicy(limit=500_000_00, apr=0.062))
     a = SupplierNode("supplier-a", net, SupplierProfile(factoring_apr=0.30))
     b = SupplierNode("supplier-b", net, SupplierProfile(factoring_apr=0.36, double_dip=True))
-    return {"net": net, "buyer": buyer, "a": a, "b": b, "step": 0, "marks": [0], "dec_marks": [0]}
+    buyer.equivocate = dishonest
+    return {"net": net, "buyer": buyer, "a": a, "b": b, "step": 0, "marks": [0], "dec_marks": [0], "dishonest": dishonest}
 
 
 def advance(w: dict) -> None:
@@ -220,8 +222,14 @@ def walkthrough_tab() -> None:
             advance(w)
             st.rerun()
         if c2.button("Restart", width="stretch"):
-            st.session_state.walk = new_walkthrough()
+            st.session_state.walk = new_walkthrough(w["dishonest"])
             st.rerun()
+    dishonest = st.toggle("Dishonest buyer: acknowledges every claim, even on an invoice it already assigned",
+                          value=w["dishonest"], disabled=w["step"] > 0,
+                          help="Shows the acknowledgment log catching a buyer that equivocates. Set before starting.")
+    if dishonest != w["dishonest"]:
+        st.session_state.walk = new_walkthrough(dishonest)
+        st.rerun()
 
     st.progress(w["step"] / len(STEPS), text=f"Step {w['step']} of {len(STEPS)}")
 
@@ -249,8 +257,17 @@ def walkthrough_tab() -> None:
         for d in dbl:
             funder = d.decision.split("assignment to ")[1].split(" ")[0]
             winner = d.decision.rsplit(" ", 1)[-1]
-            st.error(f"🛡️ **Blocked:** {funder}'s claim on {d.invoice_id}. The buyer already acknowledged "
-                     f"{winner} for this invoice, so {funder} never pays out.")
+            st.error(f"🛡️ **Blocked by the buyer's node:** {funder}'s claim on {d.invoice_id}. The buyer already "
+                     f"acknowledged {winner} for this invoice, so {funder} never pays out.")
+        for f in net.funders:
+            for inv in f.alarms:
+                st.error(f"🛡️ **Caught by the acknowledgment log:** the dishonest buyer acknowledged {inv} to two banks. "
+                         f"{f.id} published its entry, found an earlier entry from another bank, and did not fund. "
+                         "The first bank is protected by its own signed acknowledgment.")
+        reps = [e for e in new if e.msg_type == "ACCEPT" and e.sender == w["b"].id]
+        if len(reps) > 1:
+            st.warning(f"📝 Supplier B signed **\"not assigned or pledged\"** in {len(reps)} acceptances for the same "
+                       "invoice. Each one is signed evidence of misrepresentation the receiving bank can rely on.")
 
     st.markdown("**Messages in this step**")
     show_messages(new, key=f"walk-msgs-{w['step']}", compact=True)
@@ -260,6 +277,18 @@ def walkthrough_tab() -> None:
             st.caption("No decisions: the tampered message never reached a node.")
         for d in decisions:
             st.markdown(f"- `{d.node}` · {d.invoice_id}: {plain(d.decision)}")
+
+    if w["step"] >= 4:
+        log = net.ack_log
+        with st.expander(f"Acknowledgment log ({len(log.entries)} entries) · chain "
+                         + ("verified ✅" if log.verify(net.directory) else "BROKEN ❌"), expanded=w["step"] == 4):
+            st.caption("Append-only and hash-chained. Funders publish a digest of every acknowledgment before funding. "
+                       "No amounts or prices: only hashes and node ids.")
+            st.dataframe(pd.DataFrame([{
+                "#": e.seq, "Invoice hash": e.invoice_hash[:12] + "…", "Buyer": e.buyer_id, "Funder": e.funder_id,
+                "Ack digest": e.ack_digest[:12] + "…", "Previous entry": e.prev_hash[:12] + "…",
+                "Entry hash": e.entry_hash[:12] + "…",
+            } for e in log.entries]), hide_index=True, width="stretch")
 
     if w["step"] >= len(STEPS):
         st.success("Done. Each supplier was paid early, each invoice was financed exactly once, "

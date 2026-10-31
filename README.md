@@ -51,6 +51,7 @@ sequenceDiagram
     participant B as Buyer node
     participant A as Bank A
     participant X as Bank B
+    participant L as Ack log
 
     S->>B: INVOICE
     B->>S: PAYMENT_UNDERTAKING (pay face value on day 60)
@@ -61,19 +62,23 @@ sequenceDiagram
     A->>S: OFFER (firm)
     X->>S: OFFER (firm)
     B->>S: OFFER BUYER_DISCOUNT (only if its cash allows)
-    S->>A: ACCEPT best offer
+    S->>A: ACCEPT + signed representation
     A->>B: ASSIGNMENT_NOTICE + supplier signed ACCEPT
     Note over B: APPROVED to ASSIGNED, payee is now Bank A
     B->>A: ASSIGNMENT_ACK
     B->>S: ASSIGNMENT_ACK
-    A->>S: SETTLEMENT_INSTRUCTION advance, funded only after the ack
+    A->>L: publish ack entry
+    A->>L: check for an earlier ack to another bank
+    L-->>A: none found
+    A->>S: SETTLEMENT_INSTRUCTION advance, only after ack and log check
 
     rect rgba(220, 50, 50, 0.12)
     Note over S,X: Double-financing attempt
-    S->>X: ACCEPT second offer
-    X->>B: ASSIGNMENT_NOTICE + supplier signed ACCEPT
-    B->>X: ASSIGNMENT_REJECTED (double financing, already assigned)
-    Note over X: releases its limit, never pays
+    S->>X: ACCEPT second offer + signed representation
+    X->>L: check log for this invoice
+    L-->>X: already acknowledged to Bank A
+    Note over X: declines, keeps the signed representation as evidence
+    Note over B,X: If both accepts arrive before Bank A publishes, the buyer node rejects the second ASSIGNMENT_NOTICE instead
     end
 
     Note over S,X: Day 60, maturity
@@ -113,6 +118,11 @@ flowchart TB
   a notice of assignment in receivables law.
 - **Everything is signed** (Ed25519 over canonical JSON). Claims carry the counterparty's signed message
   as proof, so any node can verify without trusting anyone in the middle.
+- **Double-financing checks beyond the buyer.** Each `ACCEPT` carries the supplier's signed
+  representation that the invoice is not already assigned or pledged, which gives funders recourse if it
+  was financed outside the protocol. Funders also publish every acknowledgment to an append-only,
+  hash-chained transparency log and check it before funding, so a buyer that acknowledges the same
+  invoice to two funders is caught before the second one pays.
 - **Deterministic decisions.** Pricing, limits and the buyer's cash allocation are deterministic. The
   buyer decides which early payments to fund itself with a MILP that respects a daily cash floor and a
   payables forecast.
@@ -159,7 +169,9 @@ programme.
 
 - **Walkthrough:** one buyer, two banks and two suppliers exchange real signed messages step
   by step. One supplier tries to finance the same invoice twice, and a message is tampered with in
-  transit. Both are rejected.
+  transit. Both are rejected. It can also be run with a dishonest buyer that acknowledges the same
+  invoice to both banks: the second bank finds the earlier entry in the acknowledgment log and does not
+  fund.
 - **Network outcome:** the synthetic network's results, the buyer's cash balance against its floor, and
   who funded early payments. Every parameter can be changed from the sidebar.
 - **Buyer, supplier and funder views**, plus a filterable log where any message can be opened as its

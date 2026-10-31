@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import TYPE_CHECKING
 
+from .acklog import AckLog
 from .crypto import Directory
 from .messages import Accept, Envelope
 
@@ -54,6 +55,7 @@ class Network:
         self.queue: deque[Envelope] = deque()
         self.log: list[LogEntry] = []
         self.decisions: list[DecisionEntry] = []
+        self.ack_log = AckLog()  # in production: independent, mirrored transparency logs
 
     def join(self, node: "Node") -> None:
         self.nodes[node.id] = node

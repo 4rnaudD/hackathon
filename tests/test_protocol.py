@@ -1,6 +1,8 @@
 from datetime import date, timedelta
 
+import pytest
 from hypothesis import given, settings
+from pydantic import ValidationError
 from hypothesis import strategies as st
 
 from openfloat.crypto import Identity
@@ -121,9 +123,64 @@ def test_expired_offer_cannot_be_accepted():
     net.deliver()
     offer = next(e for e in sup.receivables["INV-1"].offers if e.sender == "bank-a")
     net.today += timedelta(days=2)
-    net.post(Envelope.seal(sup.identity, ["bank-a"], net.today, Accept(offer=offer, supplier_id="sup")))
+    net.post(Envelope.seal(sup.identity, ["bank-a"], net.today, Accept(offer=offer, supplier_id="sup", representation="NOT_ASSIGNED_OR_PLEDGED")))
     net.deliver()
     assert buyer.payables["INV-1"].status == InvStatus.APPROVED
+
+
+# --- supplier representation and acknowledgment log ---------------------------
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")  # the test deliberately sets an invalid value
+def test_accept_requires_signed_representation():
+    net, buyer, fa, fb, sup = small_net(cash=0)
+    sup.issue(invoice(), True)
+    net.deliver()
+    sup.request_early_pay()
+    net.deliver()
+    offer = sup.receivables["INV-1"].offers[0]
+    with pytest.raises(ValidationError):
+        Accept(offer=offer, supplier_id="sup")
+    acc = Envelope.seal(sup.identity, ["bank-a"], D, Accept(offer=offer, supplier_id="sup", representation="NOT_ASSIGNED_OR_PLEDGED"))
+    assert acc.verify(net.directory)
+    acc.body.representation = "SOMETHING_ELSE"  # cannot be altered after signing
+    assert not acc.verify(net.directory)
+
+
+def test_equivocating_buyer_caught_by_ack_log():
+    net, buyer, fa, fb, sup = small_net(cash=0, double_dip=True)
+    buyer.equivocate = True  # buyer acknowledges both funders
+    net.run_day(lambda n: sup.issue(invoice(), True))
+    acks = [e for e in net.log if e.msg_type == "ASSIGNMENT_ACK"]
+    assert len(acks) == 2  # the buyer really did acknowledge twice
+    funded = [s for s in net.settlements() if s.body.payee_id == "sup"]
+    assert len(funded) == 1 and funded[0].sender == "bank-a"
+    assert fb.alarms == ["INV-1"] and fb.exposure.get("buyer", 0) == 0
+    assert [e.funder_id for e in net.ack_log.for_invoice(buyer.payables["INV-1"].invoice_hash)] == ["bank-a", "bank-b"]
+    assert net.ack_log.verify(net.directory)
+
+
+def test_ack_log_tampering_detected():
+    net, buyer, fa, fb, sup = small_net(cash=0)
+    net.run_day(lambda n: [sup.issue(invoice(f"I{i}"), True) for i in range(3)])
+    log = net.ack_log
+    assert len(log.entries) >= 2 and log.verify(net.directory)
+    original = list(log.entries)
+    log.entries[0] = original[0].__class__(**{**original[0].__dict__, "funder_id": "bank-b"})  # rewrite history
+    assert not log.verify(net.directory)
+    log.entries = [original[1], original[0], *original[2:]]  # reorder
+    assert not log.verify(net.directory)
+    log.entries = original[1:]  # drop the first entry
+    assert not log.verify(net.directory)
+
+
+def test_funder_declines_invoice_already_in_log():
+    net, buyer, fa, fb, sup = small_net(cash=0)
+    net.run_day(lambda n: sup.issue(invoice(), True))
+    r = sup.receivables["INV-1"]
+    net.post(Envelope.seal(sup.identity, ["bank-b"], net.today, EarlyPayRequest(invoice_id="INV-1", requested_date=net.today, undertaking=r.undertaking)))
+    net.deliver()
+    assert any(d.node == "bank-b" and "already in the acknowledgment log" in d.decision for d in net.decisions)
 
 
 # --- policy -------------------------------------------------------------------

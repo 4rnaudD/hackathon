@@ -82,10 +82,16 @@ class Offer(BaseModel):
     annualised_rate: float  # effective APR of the discount, for comparison
 
 
+# Supplier's signed representation in every ACCEPT (legal text in SPEC.md): the receivable has not
+# been assigned, sold, pledged or otherwise encumbered in favour of anyone but the offeror.
+NOT_ASSIGNED_OR_PLEDGED = "NOT_ASSIGNED_OR_PLEDGED"
+
+
 class Accept(BaseModel):
     type: Literal["ACCEPT"] = "ACCEPT"
     offer: "Envelope"  # the signed offer being accepted
     supplier_id: str
+    representation: Literal["NOT_ASSIGNED_OR_PLEDGED"]
 
 
 class AssignmentNotice(BaseModel):
