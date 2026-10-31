@@ -20,8 +20,9 @@ reference implementation.
   silo run by one operator. Factoring volume alone is over **€4tn a year**, and supply chain finance is
   around **$2.6tn**.
 - Silos are opaque. **Double financing**, the same receivable funded more than once, is a recurring
-  failure mode in the sector. It is under investigation in the 2025 First Brands bankruptcy, and
-  opacity was central to the 2021 Greensill collapse.
+  failure mode in the sector. It is under investigation in the 2025 First Brands bankruptcy. In the
+  2021 Greensill collapse, about $10bn of supply-chain-finance funds were frozen when the platform's
+  insurance cover lapsed.
 
 Sources and confidence levels: [docs/market-context.md](docs/market-context.md).
 
