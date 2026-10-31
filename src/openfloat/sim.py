@@ -1,7 +1,7 @@
 """Synthetic scenario generator and evaluation.
 
 All data here is SYNTHETIC. Parameter defaults are anchored to the sourced
-ranges in docs/EVIDENCE.md (SME factoring ~30-57% APR, investment-grade
+ranges in docs/market-context.md (SME factoring ~30-57% APR, investment-grade
 reverse factoring ~benchmark + 60-100 bps, B2B card fees ~2%).
 """
 
@@ -38,9 +38,9 @@ class ScenarioConfig:
     p_double_dip: float = 0.05
     factoring_apr: tuple[float, float] = (0.20, 0.45)
     # buyer
-    opening_cash: int = 3_000_000_00
+    opening_cash: int = 1_600_000_00
     cash_floor: int = 1_500_000_00
-    daily_inflow: int = 150_000_00
+    daily_inflow: int = 35_000_00
     cash_yield: float = 0.040  # e.g. money-market fund yield
     discount_apr: float = 0.050
     approval_limit: int = 150_000_00

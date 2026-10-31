@@ -1,6 +1,8 @@
-# Evidence pack (sourced 2026-10-31)
+# Market context
 
-Confidence: **H** = primary/reputable source checked; **M** = trade press / vendor; **L** = secondary or not cross-checked. Items marked NOT VERIFIED must not be presented as fact.
+Sources behind the problem statement and the simulation's parameter ranges (compiled October 2026).
+
+Confidence: **H** = primary/reputable source checked; **M** = trade press / vendor; **L** = secondary or not cross-checked. Items marked NOT VERIFIED are open questions, not facts.
 
 ## Status quo cost (supplier side)
 - **SME factoring: ~1–5% per month (typ. ~2.5%)** → ~30% effective APR (2.5%/30 days, Corpay) up to ~57% APR (4%/4 weeks, NerdWallet). **M**
