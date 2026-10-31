@@ -264,6 +264,10 @@ supplier who double-finances outside the protocol is exposed to claims from the 
 
 ## 10. Out of scope for 0.1
 
+- Mechanisms that compel payment (direct-debit mandates, a bank acting as paying agent, programmable money
+  or atomic settlement) are deliberately excluded. They depend on jurisdiction and licensing, so they are
+  left to bilateral arrangements between participants and their banks. The protocol coordinates and
+  evidences obligations; banks move money; the law enforces the obligations.
 - Transport and discovery (reference implementation uses an in-process bus; HTTPS + directory lookup next).
 - Key rotation and revocation; directory governance.
 - Multiple independent acknowledgment logs, signed tree heads and gossip (the reference implementation
