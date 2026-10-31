@@ -22,7 +22,16 @@ def main() -> None:
     sim.add_argument("--no-forecast", action="store_true", help="buyer ignores payables it has not received yet")
     sim.add_argument("--greedy", action="store_true", help="use the greedy allocator instead of the MILP")
     sim.add_argument("--double-dip", type=float, default=0.05, help="share of suppliers that try to finance twice")
+    sub.add_parser("dashboard", help="open the interactive dashboard in your browser")
     args = parser.parse_args()
+
+    if args.cmd == "dashboard":
+        import subprocess
+        import sys
+        from pathlib import Path
+
+        app = Path(__file__).with_name("dashboard.py")
+        raise SystemExit(subprocess.call([sys.executable, "-m", "streamlit", "run", str(app)]))
 
     from .sim import ScenarioConfig, build, evaluate
 

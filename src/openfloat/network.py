@@ -14,10 +14,17 @@ from datetime import date, timedelta
 from typing import TYPE_CHECKING
 
 from .crypto import Directory
-from .messages import Envelope
+from .messages import Accept, Envelope
 
 if TYPE_CHECKING:
     from .nodes import BuyerNode, FunderNode, Node, SupplierNode
+
+
+def _invoice_of(env: Envelope) -> str:
+    body = env.body
+    if isinstance(body, Accept):  # the invoice id lives in the embedded offer
+        body = body.offer.body
+    return getattr(body, "invoice_id", "")
 
 
 @dataclass
@@ -62,7 +69,7 @@ class Network:
         """Deliver queued messages (and any replies they trigger) until quiet."""
         while self.queue:
             env = self.queue.popleft()
-            inv = getattr(env.body, "invoice_id", "")
+            inv = _invoice_of(env)
             if not env.verify(self.directory):
                 self.log.append(LogEntry(self.today, env.body.type, env.sender, env.recipients, inv, "rejected: bad signature", env))
                 continue
