@@ -37,11 +37,10 @@ nav a:hover { color: var(--ink); }
 .btn-sm { padding: 7px 14px; font-size: 13px; }
 
 /* hero */
-.hero { display: grid; grid-template-columns: 1.4fr 1fr; align-items: center; gap: 48px; padding-top: 112px; padding-bottom: 96px; }
+.hero { padding-top: 104px; padding-bottom: 72px; }
 .hero h1 { font-size: clamp(56px, 8vw, 96px); line-height: 1; letter-spacing: -0.04em; }
-.lede { font-size: clamp(19px, 2vw, 22px); color: var(--ink-2); max-width: 34ch; margin: 22px 0 32px; line-height: 1.5; }
+.lede { font-size: clamp(19px, 2vw, 22px); color: var(--ink-2); max-width: 44ch; margin: 22px 0 32px; line-height: 1.5; }
 .actions { display: flex; gap: 12px; flex-wrap: wrap; }
-.glyph { width: min(240px, 60%); justify-self: center; color: var(--ink); }
 
 /* code box */
 .codebox { border: 1.5px solid var(--ink); padding: 28px 32px 24px; }
@@ -53,7 +52,7 @@ code { font-family: var(--mono); }
 .codebox p a { color: var(--ink); white-space: nowrap; }
 
 /* statement */
-.statement { padding-top: 104px; }
+.statement { padding-top: 56px; }
 .statement h2 { max-width: 18ch; }
 .statement p:last-child { font-size: 18px; color: var(--ink-2); max-width: 60ch; margin: 20px 0 0; }
 .fn { font-size: 11px; vertical-align: super; margin-left: 2px; text-decoration: none; color: var(--muted); }
@@ -61,7 +60,7 @@ code { font-family: var(--mono); }
 /* zeros */
 .zeros { background: var(--tint); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .grid5 { list-style: none; padding: 0; margin: 40px 0 0; display: grid; grid-template-columns: repeat(5, 1fr); gap: 28px; }
-.grid5 svg { width: 30px; height: 30px; fill: none; stroke: var(--ink); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.grid5 svg { width: 28px; height: 28px; fill: none; stroke: var(--ink); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .grid5 h3 { font-size: 22px; margin: 14px 0 6px; line-height: 1.2; }
 .grid5 p { margin: 0; font-size: 14px; color: var(--ink-2); line-height: 1.5; }
 
@@ -104,11 +103,10 @@ details p { color: var(--ink-2); max-width: 72ch; margin: 14px 0 0; font-size: 1
 @media (max-width: 640px) {
   .wrap { padding-left: 20px; padding-right: 20px; }
   section { padding: 52px 0; }
-  .hero { grid-template-columns: 1fr; padding-top: 64px; padding-bottom: 48px; gap: 32px; }
-  .glyph { display: none; }
+  .hero { padding-top: 64px; padding-bottom: 40px; }
   nav a:not(.btn) { display: none; }
   .codebox { padding: 20px 18px; }
-  .codebox pre { font-size: 12.5px; padding: 16px; }
+  .codebox pre { font-size: 12.5px; padding: 16px; white-space: pre-wrap; word-break: break-word; }
   .grid5 { grid-template-columns: 1fr; gap: 22px; }
   .term { font-size: 12.5px; }
 }

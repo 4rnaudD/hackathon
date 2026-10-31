@@ -28,10 +28,18 @@ def main() -> None:
     if args.cmd == "dashboard":
         import subprocess
         import sys
+        import threading
+        import webbrowser
         from pathlib import Path
 
         app = Path(__file__).with_name("dashboard.py")
-        raise SystemExit(subprocess.call([sys.executable, "-m", "streamlit", "run", str(app)]))
+        url = "http://localhost:8501"
+        # headless skips Streamlit's interactive first-run email prompt; we open the browser ourselves
+        print(f"OpenFloat dashboard: {url}  (Ctrl+C to stop)")
+        threading.Timer(3.0, lambda: webbrowser.open(url)).start()
+        cmd = [sys.executable, "-m", "streamlit", "run", str(app), "--server.headless", "true",
+               "--server.port", "8501", "--browser.gatherUsageStats", "false"]
+        raise SystemExit(subprocess.call(cmd))
 
     from .sim import ScenarioConfig, build, evaluate
 
