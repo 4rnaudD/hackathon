@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>OpenFloat: an open protocol for financing at the payment layer</title>
-<meta name="description" content="OpenFloat is an open, operator-less protocol that lets a supplier with a buyer-approved invoice get paid early by the cheapest liquidity source: the buyer's own cash or a bank pricing off the buyer's credit. Signed messages, one acknowledgment per invoice, settlement on existing bank rails.">
+<title>OpenFloat: open-source protocol for financing at the payment layer</title>
+<meta name="description" content="OpenFloat is an open-source, operator-less protocol that lets a supplier with a buyer-approved invoice get paid early by the cheapest liquidity source. Read the code: signed messages, one acknowledgment per invoice, a transparency log, and ISO 20022 payment files for existing bank rails.">
 <meta property="og:type" content="website">
 <meta property="og:title" content="OpenFloat: get paid early at your buyer's cost of money">
-<meta property="og:description" content="An open protocol for financing approved invoices at the payment layer. No central operator, signed messages, double-financing checks, and payments on the bank rails participants already use.">
+<meta property="og:description" content="An open-source protocol for financing approved invoices at the payment layer. Apache-2.0 reference implementation in Python: signed messages, double-financing checks, and payments on the bank rails participants already use.">
 <meta name="theme-color" content="#f9f9f7">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232a78d6'/%3E%3Cpath d='M7 20h18' stroke='white' stroke-width='3' stroke-linecap='round'/%3E%3Ccircle cx='16' cy='12' r='4' fill='white'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="style.css">
@@ -22,9 +22,10 @@
       OpenFloat
     </a>
     <nav class="nav" aria-label="Primary">
+      <a class="nav-sec" href="#code">Code</a>
       <a class="nav-sec" href="#how">How it works</a>
       <a class="nav-sec" href="#double">Double financing</a>
-      <a class="nav-sec" href="#rails">Payments</a>
+      <a class="nav-sec" href="#tests">Tests</a>
       <a class="nav-sec" href="#results">Results</a>
       <a href="https://github.com/4rnaudD/openfloat/blob/main/SPEC.md">Spec</a>
       <a class="nav-gh" href="https://github.com/4rnaudD/openfloat">GitHub</a>
@@ -38,16 +39,147 @@
 <section class="hero" id="top">
   <div class="wrap hero-grid">
     <div>
-      <p class="eyebrow">An open protocol for financing at the payment layer</p>
+      <p class="eyebrow">Open-source protocol and reference implementation</p>
       <h1>Get paid early at your buyer’s cost of money.</h1>
-      <p class="lead">A supplier holding an invoice its buyer has approved can be paid today by the cheapest source of liquidity: the buyer’s own cash, or a bank pricing off the buyer’s credit. OpenFloat is the open, operator-less protocol that makes this possible, with an Apache-2.0 reference implementation.</p>
+      <p class="lead">A supplier holding an invoice its buyer has approved can be paid today by the cheapest source of liquidity: the buyer’s own cash, or a bank pricing off the buyer’s credit. OpenFloat is the open, operator-less protocol for it, and every rule is code you can read, run and test.</p>
       <div class="actions">
-        <a class="btn btn-primary" href="https://github.com/4rnaudD/openfloat/blob/main/SPEC.md">Read the spec</a>
-        <a class="btn btn-secondary" href="https://github.com/4rnaudD/openfloat">View on GitHub</a>
+        <a class="btn btn-primary" href="https://github.com/4rnaudD/openfloat">View the code on GitHub</a>
+        <a class="btn btn-secondary" href="https://github.com/4rnaudD/openfloat/blob/main/SPEC.md">Read the spec</a>
       </div>
-      <p class="status"><span class="pill">Draft <code>openfloat/0.1</code></span><span class="pill">Code: Apache-2.0</span><span class="pill">Spec: CC BY 4.0</span></p>
+      <ul class="facts" aria-label="Project facts">
+        <li><a href="https://github.com/4rnaudD/openfloat/blob/main/LICENSE">Apache-2.0</a></li>
+        <li>Spec CC BY 4.0</li>
+        <li><a href="#tests">21 tests passing</a></li>
+        <li><a href="#code">~2.1k lines of Python</a>, excluding the dashboard UI</li>
+        <li>Draft <code>openfloat/0.1</code></li>
+      </ul>
     </div>
 
+    <figure class="term hero-term">
+      <div class="term-bar" aria-hidden="true"><i></i><i></i><i></i><span>openfloat</span></div>
+<pre tabindex="0" aria-label="Terminal session: clone, install and run the simulation"><code><span class="tp">$</span> <span class="tcmd">git clone https://github.com/4rnaudD/openfloat</span>
+<span class="tp">$</span> <span class="tcmd">cd openfloat &amp;&amp; uv sync</span>
+<span class="tp">$</span> <span class="tcmd">uv run openfloat simulate</span>
+<span class="to">openfloat/0.1 | synthetic scenario seed=7 | 1726 signed messages</span>
+
+<span class="to">  Invoices issued                           188</span>
+<span class="to">  Early payment requested / financed        112 / 112</span>
+<span class="to">  Routes                                    BUYER_DISCOUNT: 57, FUNDER: 55</span>
+<span class="to">  Face value financed                       2,445,600</span>
+<span class="to">  Supplier cost via OpenFloat               19,301</span>
+<span class="to">  Supplier cost via own factoring           110,288</span>
+<span class="tem">  Supplier saving                           90,987</span>
+<span class="to">  Buyer discount income, net of cash yield  1,298</span>
+<span class="tem">  Double-financing attempts blocked         4</span>
+<span class="to">  Messages rejected (bad signature)         0</span>
+<span class="to">  Buyer min balance / floor                 1,465,412 / 1,500,000</span>
+<span class="to">  Days below floor caused by early payment  1</span>
+<span class="tp">$</span> <span class="tcmd">uv run openfloat dashboard</span><span class="tc">   # walkthrough in the browser</span></code></pre>
+      <figcaption>Real output of <code>openfloat simulate</code>, seed 7, on synthetic data: 1,726 signed messages between one buyer, 25 suppliers and two banks.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- 2. PROBLEM -->
+<section id="problem">
+  <div class="wrap">
+    <p class="eyebrow">The problem</p>
+    <h2>The rules of supplier finance run in code nobody can read.</h2>
+    <p class="lead">Every early-payment programme depends on the same three rules. Has the buyer confirmed it will pay? Has this invoice already been financed? Who gets paid at maturity? Today those rules run inside closed platforms, each operated by one company, each a silo.</p>
+
+    <div class="grid grid-3">
+      <div class="card stat">
+        <span class="label">Opaque</span>
+        <span class="value">~30–57%&nbsp;APR<sup><a href="#src-1" aria-label="Source 1">1</a>,<a href="#src-2" aria-label="Source 2">2</a></sup></span>
+        <p>What suppliers typically pay for factoring, priced off their own credit. They cannot see why, when their buyer’s confirmation would price the same invoice at around benchmark + 60–100&nbsp;bps<sup><a href="#src-3" aria-label="Source 3">3</a></sup>.</p>
+        <span class="conf">Factoring: trade press and vendor sources. Buyer-quality pricing: indicative, single secondary source.</span>
+      </div>
+      <div class="card stat">
+        <span class="label">Unverifiable</span>
+        <span class="value">~$10bn&nbsp;frozen<sup><a href="#src-8" aria-label="Source 8">8</a></sup></span>
+        <p>Funders cannot check what was financed elsewhere, so when the record is private, double financing surfaces too late. It is under investigation in the 2025 First Brands bankruptcy (allegations only)<sup><a href="#src-6" aria-label="Source 6">6</a>,<a href="#src-7" aria-label="Source 7">7</a></sup>. In the 2021 Greensill collapse, about $10bn of supply-chain-finance funds were frozen when the platform’s insurance cover lapsed.</p>
+        <span class="conf">Greensill: reputable press. First Brands: allegations under investigation.</span>
+      </div>
+      <div class="card stat">
+        <span class="label">Locked in</span>
+        <span class="value">&gt;&nbsp;€4tn&nbsp;a&nbsp;year<sup><a href="#src-4" aria-label="Source 4">4</a></sup></span>
+        <p>Buyers cannot run a programme themselves: the logic, the pricing and the registry belong to the platform. Global factoring is over €4tn a year, and supply chain finance about $2.6tn<sup><a href="#src-5" aria-label="Source 5">5</a></sup>, largely on proprietary platforms.</p>
+        <span class="conf">Industry body via trade press; industry report.</span>
+      </div>
+    </div>
+
+    <div class="answer">
+      <p class="principle">OpenFloat makes those rules open code: a spec anyone can implement and a reference implementation anyone can read, run and test.</p>
+      <ol class="rules">
+        <li><a href="#how"><span class="q">Has the buyer confirmed it will pay?</span><span class="a">A signed <code>PAYMENT_UNDERTAKING</code>, checked by <code>Envelope.verify</code></span></a></li>
+        <li><a href="#double"><span class="q">Has this invoice already been financed?</span><span class="a">The buyer acknowledges once, and funders check the acknowledgment log</span></a></li>
+        <li><a href="#rails"><span class="q">Who gets paid at maturity?</span><span class="a">The payee in the buyer’s <code>ASSIGNMENT_ACK</code>, paid on existing bank rails</span></a></li>
+      </ol>
+    </div>
+  </div>
+</section>
+
+<!-- 3. READ THE CODE -->
+<section id="code">
+  <div class="wrap">
+    <p class="eyebrow">Read the code</p>
+    <h2>Ten modules and one test file. Small enough to read end to end.</h2>
+    <p class="lead">Python 3.12, Pydantic models and Ed25519 signatures. Start with <code>messages.py</code>, then <code>nodes.py</code>; every decision a node takes is logged with its reason.</p>
+
+    <div class="code-layout">
+      <div class="codemap-wrap">
+        <table class="codemap">
+          <caption class="sr-only">Modules of the reference implementation, with line counts</caption>
+          <thead><tr><th scope="col">File</th><th scope="col">What it does</th><th scope="col" class="n">Lines</th></tr></thead>
+          <tbody>
+            <tr><th scope="row"><a href="https://github.com/4rnaudD/openfloat/blob/main/src/openfloat/crypto.py">crypto.py</a></th><td>Node identities, canonical JSON, Ed25519 signing and verification</td><td class="n">83</td></tr>
+            <tr><th scope="row"><a href="https://github.com/4rnaudD/openfloat/blob/main/src/openfloat/messages.py">messages.py</a></th><td>Every protocol message, and the signed <code>Envelope</code> that verifies embedded proofs recursively</td><td class="n">239</td></tr>
+            <tr><th scope="row"><a href="https://github.com/4rnaudD/openfloat/blob/main/src/openfloat/nodes.py">nodes.py</a></th><td>Buyer, supplier and funder nodes: each keeps its own state and records each decision with a reason</td><td class="n">621</td></tr>
+            <tr><th scope="row"><a href="https://github.com/4rnaudD/openfloat/blob/main/src/openfloat/acklog.py">acklog.py</a></th><td>Append-only, hash-chained acknowledgment log, in the style of Certificate Transparency</td><td class="n">89</td></tr>
+            <tr><th scope="row"><a href="https://github.com/4rnaudD/openfloat/blob/main/src/openfloat/optimiser.py">optimiser.py</a></th><td>The buyer’s choice of which invoices to pay early from its own cash, without breaching its cash floor</td><td class="n">143</td></tr>
+            <tr><th scope="row"><a href="https://github.com/4rnaudD/openfloat/blob/main/src/openfloat/rails.py">rails.py</a></th><td>Mock bank rails: execute transfers, report status (pain.002) and credits (camt.054)</td><td class="n">57</td></tr>
+            <tr><th scope="row"><a href="https://github.com/4rnaudD/openfloat/blob/main/src/openfloat/iso20022.py">iso20022.py</a></th><td>Renders settlement instructions as ISO 20022 pain.001.001.09 payment files</td><td class="n">84</td></tr>
+            <tr><th scope="row"><a href="https://github.com/4rnaudD/openfloat/blob/main/src/openfloat/network.py">network.py</a></th><td>In-process transport that verifies every signature before a node sees a message</td><td class="n">133</td></tr>
+            <tr><th scope="row"><a href="https://github.com/4rnaudD/openfloat/blob/main/src/openfloat/sim.py">sim.py</a></th><td>Synthetic scenario generator and evaluation</td><td class="n">244</td></tr>
+            <tr><th scope="row"><a href="https://github.com/4rnaudD/openfloat/blob/main/src/openfloat/__init__.py">__init__.py</a></th><td>The <code>openfloat</code> command line</td><td class="n">62</td></tr>
+            <tr class="sub"><th scope="row">Protocol code</th><td></td><td class="n">1,755</td></tr>
+            <tr><th scope="row"><a href="https://github.com/4rnaudD/openfloat/blob/main/tests/test_protocol.py">tests/test_protocol.py</a></th><td>21 tests: attacks, payment evidence and property-based invariants</td><td class="n">342</td></tr>
+            <tr class="dim"><th scope="row"><a href="https://github.com/4rnaudD/openfloat/blob/main/src/openfloat/dashboard.py">dashboard*.py</a></th><td>Local Streamlit walkthrough UI (three files), not part of the protocol</td><td class="n">1,002</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="run">
+        <h3>Run it</h3>
+        <p class="muted small">Python 3.12+ and <a href="https://docs.astral.sh/uv/">uv</a>. Everything runs locally; no real money moves.</p>
+        <div class="codebox">
+<pre class="hl" tabindex="0" aria-label="Quickstart commands"><code>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/4rnaudD/openfloat
+<span class="nb">cd</span><span class="w"> </span>openfloat<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>uv<span class="w"> </span>sync
+
+<span class="c1"># step-by-step walkthrough in the browser</span>
+uv<span class="w"> </span>run<span class="w"> </span>openfloat<span class="w"> </span>dashboard
+
+<span class="c1"># synthetic network: 1 buyer, 25 suppliers, 2 banks</span>
+uv<span class="w"> </span>run<span class="w"> </span>openfloat<span class="w"> </span>simulate
+
+<span class="c1"># 21 protocol and invariant tests</span>
+uv<span class="w"> </span>run<span class="w"> </span>pytest</code></pre>
+        </div>
+        <p class="muted small">Files under <code>src/openfloat/</code>. Line counts at commit <a href="https://github.com/4rnaudD/openfloat/tree/49ca1548fbc558a0149b20252edaf09af646722c"><code>49ca154</code></a>; code excerpts on this page link to the exact lines at that commit.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 4. HOW IT WORKS -->
+<section id="how">
+  <div class="wrap">
+    <p class="eyebrow">How it works</p>
+    <h2>Every message is signed. Every claim carries its proof.</h2>
+    <div class="split split-top">
+      <div>
+        <p class="lead">Each participant runs its own node. Nodes exchange Ed25519-signed messages directly and resolve each other’s keys through a participant directory. The buyer’s approval is a signed <code>PAYMENT_UNDERTAKING</code>; a message that relies on it carries it as an embedded proof, so any node can check it without trusting anyone in between.</p>
+        <p class="muted">That signed promise is what lets a funder price off the buyer’s credit rather than the supplier’s. The supplier then takes the cheapest firm offer: the buyer’s own cash at a discount, or a funder’s advance.</p>
+      </div>
     <figure class="hero-figure">
       <svg class="gap-wide" viewBox="0 0 480 300" role="img" aria-labelledby="gap-t gap-d">
         <title id="gap-t">The financing gap</title>
@@ -134,63 +266,80 @@
       </svg>
       <figcaption>The buyer has approved the invoice and pays on day 60. Whoever offers the cheapest money fills the gap.</figcaption>
     </figure>
-  </div>
-</section>
-
-<!-- 2. PROBLEM -->
-<section id="problem">
-  <div class="wrap">
-    <p class="eyebrow">The problem</p>
-    <h2>The same invoice is priced twice, depending on whose credit you look at.</h2>
-    <p class="lead">Small suppliers who need cash before an invoice is due usually turn to factoring, priced off their own credit. Once a large buyer has confirmed it will pay, that invoice is close to a buyer-quality asset. The spread between the two is captured today inside closed, single-operator platforms.</p>
-
-    <div class="grid grid-4">
-      <div class="card stat">
-        <span class="label">Supplier factoring</span>
-        <span class="value">~30–57%<sup><a href="#src-1" aria-label="Source 1">1</a>,<a href="#src-2" aria-label="Source 2">2</a></sup></span>
-        <p>Effective APR of SME invoice factoring at around 1–5% a month. Priced off the supplier’s credit.</p>
-        <span class="conf">Trade press and vendor sources</span>
-      </div>
-      <div class="card stat">
-        <span class="label">Buyer-quality funding</span>
-        <span class="value">+60–100&nbsp;bps<sup><a href="#src-3" aria-label="Source 3">3</a></sup></span>
-        <p>Around benchmark (SOFR) plus 60–100 bps for reverse factoring off an investment-grade buyer. An illustrative range.</p>
-        <span class="conf">Single secondary source, not cross-checked</span>
-      </div>
-      <div class="card stat">
-        <span class="label">Global factoring, 2025</span>
-        <span class="value">&gt;&nbsp;€4tn<sup><a href="#src-4" aria-label="Source 4">4</a></sup></span>
-        <p>About €4.04tn a year, up 3.7% year on year, per FCI figures.</p>
-        <span class="conf">Industry body, via trade press</span>
-      </div>
-      <div class="card stat">
-        <span class="label">Supply chain finance, 2025</span>
-        <span class="value">~$2.6tn<sup><a href="#src-5" aria-label="Source 5">5</a></sup></span>
-        <p>Approximate annual volume, largely run through proprietary platforms, each a closed silo.</p>
-        <span class="conf">Industry report</span>
-      </div>
     </div>
 
-    <div class="split">
+    <figure class="code">
+<div class="code-head"><span class="file">src/openfloat/messages.py</span><span class="lines"><a href="https://github.com/4rnaudD/openfloat/blob/49ca1548fbc558a0149b20252edaf09af646722c/src/openfloat/messages.py#L200-L230">L200&#8211;230</a> <span class="gh">on GitHub</span></span></div>
+<pre class="hl numbered" tabindex="0"><code><span class="ln" data-n="200">    <span class="n">msg_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="k">lambda</span><span class="p">:</span> <span class="n">uuid</span><span class="o">.</span><span class="n">uuid4</span><span class="p">()</span><span class="o">.</span><span class="n">hex</span><span class="p">[:</span><span class="mi">16</span><span class="p">])</span></span>
+<span class="ln" data-n="201">    <span class="n">sender</span><span class="p">:</span> <span class="nb">str</span></span>
+<span class="ln" data-n="202">    <span class="n">recipients</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span></span>
+<span class="ln" data-n="203">    <span class="n">sent_on</span><span class="p">:</span> <span class="n">date</span></span>
+<span class="ln" data-n="204">    <span class="n">body</span><span class="p">:</span> <span class="n">Body</span></span>
+<span class="ln" data-n="205">    <span class="n">signature</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span></span>
+<span class="ln" data-n="206"></span>
+<span class="ln" data-n="207">    <span class="k">def</span> <span class="nf">signing_payload</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span></span>
+<span class="ln" data-n="208">        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">model_dump</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s2">&quot;json&quot;</span><span class="p">,</span> <span class="n">exclude</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;signature&quot;</span><span class="p">})</span></span>
+<span class="ln" data-n="209"></span>
+<span class="ln" data-n="210">    <span class="nd">@classmethod</span></span>
+<span class="ln" data-n="211">    <span class="k">def</span> <span class="nf">seal</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">identity</span><span class="p">:</span> <span class="n">Identity</span><span class="p">,</span> <span class="n">recipients</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">sent_on</span><span class="p">:</span> <span class="n">date</span><span class="p">,</span> <span class="n">body</span><span class="p">:</span> <span class="n">BaseModel</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;Envelope&quot;</span><span class="p">:</span></span>
+<span class="ln" data-n="212">        <span class="n">env</span> <span class="o">=</span> <span class="bp">cls</span><span class="p">(</span><span class="n">sender</span><span class="o">=</span><span class="n">identity</span><span class="o">.</span><span class="n">node_id</span><span class="p">,</span> <span class="n">recipients</span><span class="o">=</span><span class="n">recipients</span><span class="p">,</span> <span class="n">sent_on</span><span class="o">=</span><span class="n">sent_on</span><span class="p">,</span> <span class="n">body</span><span class="o">=</span><span class="n">body</span><span class="p">)</span></span>
+<span class="ln" data-n="213">        <span class="n">env</span><span class="o">.</span><span class="n">signature</span> <span class="o">=</span> <span class="n">identity</span><span class="o">.</span><span class="n">sign</span><span class="p">(</span><span class="n">env</span><span class="o">.</span><span class="n">signing_payload</span><span class="p">())</span></span>
+<span class="ln" data-n="214">        <span class="k">return</span> <span class="n">env</span></span>
+<span class="ln" data-n="215"></span>
+<span class="ln" data-n="216">    <span class="k">def</span> <span class="nf">verify</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">directory</span><span class="p">:</span> <span class="n">Directory</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span></span>
+<span class="ln" data-n="217"><span class="w">        </span><span class="sd">&quot;&quot;&quot;Check this envelope&#39;s signature and, recursively, any embedded envelopes.&quot;&quot;&quot;</span></span>
+<span class="ln" data-n="218">        <span class="n">key</span> <span class="o">=</span> <span class="n">directory</span><span class="o">.</span><span class="n">public_key</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">sender</span><span class="p">)</span></span>
+<span class="ln" data-n="219">        <span class="k">if</span> <span class="n">key</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">verify</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">signing_payload</span><span class="p">(),</span> <span class="bp">self</span><span class="o">.</span><span class="n">signature</span><span class="p">):</span></span>
+<span class="ln" data-n="220">            <span class="k">return</span> <span class="kc">False</span></span>
+<span class="ln" data-n="221">        <span class="k">for</span> <span class="n">proof</span> <span class="ow">in</span> <span class="n">_embedded</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">body</span><span class="p">):</span></span>
+<span class="ln" data-n="222">            <span class="k">if</span> <span class="ow">not</span> <span class="n">proof</span><span class="o">.</span><span class="n">verify</span><span class="p">(</span><span class="n">directory</span><span class="p">):</span></span>
+<span class="ln" data-n="223">                <span class="k">return</span> <span class="kc">False</span></span>
+<span class="ln" data-n="224">        <span class="k">return</span> <span class="kc">True</span></span>
+<span class="ln" data-n="225"></span>
+<span class="ln" data-n="226"></span>
+<span class="ln" data-n="227"><span class="k">def</span> <span class="nf">_embedded</span><span class="p">(</span><span class="n">body</span><span class="p">:</span> <span class="n">BaseModel</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">Envelope</span><span class="p">]:</span></span>
+<span class="ln" data-n="228">    <span class="k">match</span> <span class="n">body</span><span class="p">:</span></span>
+<span class="ln" data-n="229">        <span class="k">case</span> <span class="n">EarlyPayRequest</span><span class="p">():</span></span>
+<span class="ln" data-n="230">            <span class="k">return</span> <span class="p">[</span><span class="n">body</span><span class="o">.</span><span class="n">undertaking</span><span class="p">]</span></span></code></pre>
+<figcaption><strong>Seal and verify.</strong> The signature covers the whole envelope except the signature itself: sender, recipients, date and body. <code>verify</code> then recurses into any signed envelope the body embeds.</figcaption>
+</figure>
+
+    <div class="split envelope" id="envelope">
+      <figure class="code">
+        <div class="code-head"><span class="file">A real signed message</span><span class="lines">from the walkthrough scenario</span></div>
+<pre class="hl" tabindex="0" aria-label="Signed ASSIGNMENT_ACK envelope in JSON"><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;protocol&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;openfloat/0.1&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;msg_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;8241272f61f040ba&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;sender&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;acme-buyer&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;recipients&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">    </span><span class="s2">&quot;bank-a&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="s2">&quot;supplier-b&quot;</span>
+<span class="w">  </span><span class="p">],</span>
+<span class="w">  </span><span class="nt">&quot;sent_on&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2026-11-02&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;body&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;ASSIGNMENT_ACK&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;invoice_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;INV-B1&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;invoice_hash&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;61028089e9f3ce8a67990b48d8b3a32aa378523bbc64d970c1b595f9c735728d&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;new_payee_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;bank-a&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;amount&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">4000000</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;due_date&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2027-01-01&quot;</span>
+<span class="w">  </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">&quot;signature&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;si4pfB7Rbw6k0pH5OYXP2YiVMKTNcdC+yUYjKzut41YF4dejwz4qmNO7DBtdSuJVHurk3exIMSvYI9+ME2IWBQ==&quot;</span>
+<span class="p">}</span></code></pre>
+      </figure>
       <div>
-        <h3>Closed silos are opaque</h3>
-        <p class="muted">Each supply-chain-finance programme lives on one operator’s platform. Funders on one platform cannot see what was financed on another, and none of them is in a position to see everything a supplier has pledged.</p>
-      </div>
-      <div class="callout">
-        <h3>Double financing keeps recurring</h3>
-        <p>The same receivable funded more than once is a recurring failure mode. It is under investigation in the 2025 First Brands bankruptcy, where receivables were allegedly financed more than once (allegations only)<sup><a href="#src-6" aria-label="Source 6">6</a>,<a href="#src-7" aria-label="Source 7">7</a></sup>. In the 2021 Greensill collapse, about $10bn of supply-chain-finance funds were frozen when the platform's insurance cover lapsed<sup><a href="#src-8" aria-label="Source 8">8</a></sup>.</p>
+        <h3>Reading an <code>ASSIGNMENT_ACK</code></h3>
+        <ul class="plain notes">
+          <li><strong><code>sender</code></strong> is the buyer. Any node verifies <code>signature</code> with the buyer’s public key from the directory.</li>
+          <li><strong>The signature covers everything else</strong>: protocol version, message id, recipients, date and the whole body, encoded as canonical JSON. Change one character and verification fails.</li>
+          <li><strong><code>invoice_hash</code></strong> is the SHA-256 of the invoice’s content. It binds the acknowledgment to one exact invoice, so an altered or re-issued invoice cannot reuse it.</li>
+          <li><strong><code>new_payee_id</code></strong> is the funder the buyer will pay at maturity: <code>amount</code> in minor units (40,000.00) on <code>due_date</code>.</li>
+          <li>Sent to the funder <em>and</em> the supplier, so both hold the buyer’s signed word.</li>
+        </ul>
       </div>
     </div>
-  </div>
-</section>
 
-<!-- 3. HOW IT WORKS -->
-<section id="how">
-  <div class="wrap">
-    <p class="eyebrow">How it works</p>
-    <h2>Signed messages between the parties. No platform in the middle.</h2>
-    <p class="lead">Every participant runs its own node. Nodes exchange Ed25519-signed messages directly and resolve each other’s keys through a participant directory. Claims that rely on another party’s word carry that party’s signed message as embedded proof, so any node can verify without trusting anyone in between.</p>
-
+    <h3 class="flow-title">The full message sequence</h3>
     <figure class="diagram">
       <div class="legend" aria-hidden="true">
         <span><i style="background:#eb6834"></i>Supplier</span>
@@ -349,79 +498,119 @@
       </ol>
       <figcaption>Funder-funded path. If the supplier accepts the buyer’s own discount offer instead, the buyer pays early from its cash, marks the invoice paid, and rejects any later assignment.</figcaption>
     </figure>
-
-    <div class="grid grid-3">
-      <div class="card">
-        <span class="num">1</span>
-        <h3>The buyer signs a promise</h3>
-        <p>When the buyer approves an invoice, its node signs a payment undertaking: pay this amount on this date. That signed promise is what lets funders price off the buyer’s credit rather than the supplier’s.</p>
-      </div>
-      <div class="card">
-        <span class="num">2</span>
-        <h3>The cheapest money wins</h3>
-        <p>The supplier asks for early payment. Funders reply with firm offers; the buyer can offer to pay early from its own cash, deciding with a cash-floor-aware optimiser. The supplier accepts one.</p>
-      </div>
-      <div class="card">
-        <span class="num">3</span>
-        <h3>The buyer acknowledges once</h3>
-        <p>If a funder wins, the buyer’s node records it as the new payee and acknowledges once. The funder pays only after that acknowledgment, and the buyer pays the funder at maturity.</p>
-      </div>
-    </div>
   </div>
 </section>
 
-<!-- 4. DOUBLE FINANCING -->
+<!-- 5. DOUBLE FINANCING -->
 <section id="double">
   <div class="wrap">
     <p class="eyebrow">Double financing</p>
     <h2>Why no one can finance an invoice twice.</h2>
-    <p class="lead">Three independent checks, each covering a different party who might try.</p>
+    <p class="lead">Three checks, each against a different party who might try. Here is each one in the code.</p>
 
-    <div class="grid grid-3">
-      <div class="card">
-        <span class="num">1</span>
-        <h3>The buyer acknowledges once</h3>
-        <p>The buyer owes the money, so its node decides who gets paid at maturity, the same logic as a notice of assignment in receivables law. The first valid assignment moves the invoice to <code>ASSIGNED</code>; every later one is rejected. Funders fund only after a matching acknowledgment.</p>
-      </div>
-      <div class="card">
-        <span class="num">2</span>
-        <h3>The supplier signs a representation</h3>
-        <p>Every <code>ACCEPT</code> carries the supplier’s signed statement that the invoice is not assigned or pledged. The protocol cannot see a factor or lender outside it; this does not prevent that, but it turns each acceptance into signed evidence that gives the funder recourse.</p>
-      </div>
-      <div class="card">
-        <span class="num">3</span>
-        <h3>Acknowledgments are published</h3>
-        <p>A dishonest buyer could acknowledge the same invoice to two funders, each seeing only its own. Funders publish every acknowledgment to an append-only, hash-chained log, in the style of Certificate Transparency, then check it. A later funder finds the earlier entry and does not pay out.</p>
-      </div>
+    <div class="check">
+      <div class="check-head"><span class="num">1</span><div><h3>The buyer acknowledges at most once</h3><p class="muted">The buyer owes the money, so its node decides who gets paid at maturity, the same logic as a notice of assignment in receivables law. The first valid assignment moves the invoice to <code>ASSIGNED</code>; every later one is rejected. Funders fund only after a matching acknowledgment.</p></div></div>
+      <figure class="code">
+<div class="code-head"><span class="file">src/openfloat/nodes.py</span><span class="lines"><a href="https://github.com/4rnaudD/openfloat/blob/49ca1548fbc558a0149b20252edaf09af646722c/src/openfloat/nodes.py#L334-L351">L334&#8211;351</a>, <a href="https://github.com/4rnaudD/openfloat/blob/49ca1548fbc558a0149b20252edaf09af646722c/src/openfloat/nodes.py#L353-L358">L353&#8211;358</a>, <a href="https://github.com/4rnaudD/openfloat/blob/49ca1548fbc558a0149b20252edaf09af646722c/src/openfloat/nodes.py#L363-L367">L363&#8211;367</a> <span class="gh">on GitHub</span></span></div>
+<pre class="hl numbered" tabindex="0"><code><span class="ln" data-n="334">    <span class="k">def</span> <span class="nf">_on_assignment</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">env</span><span class="p">:</span> <span class="n">Envelope</span><span class="p">,</span> <span class="n">note</span><span class="p">:</span> <span class="n">AssignmentNotice</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span></span>
+<span class="ln" data-n="335">        <span class="n">p</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">payables</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">note</span><span class="o">.</span><span class="n">invoice_id</span><span class="p">)</span></span>
+<span class="ln" data-n="336"></span>
+<span class="ln" data-n="337">        <span class="k">def</span> <span class="nf">reject</span><span class="p">(</span><span class="n">reason</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span></span>
+<span class="ln" data-n="338">            <span class="bp">self</span><span class="o">.</span><span class="n">decide</span><span class="p">(</span><span class="n">note</span><span class="o">.</span><span class="n">invoice_id</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;assignment to </span><span class="si">{</span><span class="n">note</span><span class="o">.</span><span class="n">new_payee_id</span><span class="si">}</span><span class="s2"> REJECTED: </span><span class="si">{</span><span class="n">reason</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></span>
+<span class="ln" data-n="339">            <span class="bp">self</span><span class="o">.</span><span class="n">send</span><span class="p">([</span><span class="n">note</span><span class="o">.</span><span class="n">new_payee_id</span><span class="p">],</span> <span class="n">AssignmentRejected</span><span class="p">(</span><span class="n">invoice_id</span><span class="o">=</span><span class="n">note</span><span class="o">.</span><span class="n">invoice_id</span><span class="p">,</span> <span class="n">new_payee_id</span><span class="o">=</span><span class="n">note</span><span class="o">.</span><span class="n">new_payee_id</span><span class="p">,</span> <span class="n">reason</span><span class="o">=</span><span class="n">reason</span><span class="p">))</span></span>
+<span class="ln" data-n="340"></span>
+<span class="ln" data-n="341">        <span class="k">if</span> <span class="n">p</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span></span>
+<span class="ln" data-n="342">            <span class="k">return</span> <span class="n">reject</span><span class="p">(</span><span class="s2">&quot;unknown invoice&quot;</span><span class="p">)</span></span>
+<span class="ln" data-n="343">        <span class="n">acc_env</span> <span class="o">=</span> <span class="n">note</span><span class="o">.</span><span class="n">acceptance</span></span>
+<span class="ln" data-n="344">        <span class="n">acc</span> <span class="o">=</span> <span class="n">acc_env</span><span class="o">.</span><span class="n">body</span></span>
+<span class="ln" data-n="345">        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">acc</span><span class="p">,</span> <span class="n">Accept</span><span class="p">)</span> <span class="ow">or</span> <span class="n">acc_env</span><span class="o">.</span><span class="n">sender</span> <span class="o">!=</span> <span class="n">p</span><span class="o">.</span><span class="n">invoice</span><span class="o">.</span><span class="n">supplier_id</span><span class="p">:</span></span>
+<span class="ln" data-n="346">            <span class="k">return</span> <span class="n">reject</span><span class="p">(</span><span class="s2">&quot;acceptance not signed by the invoice&#39;s supplier&quot;</span><span class="p">)</span></span>
+<span class="ln" data-n="347">        <span class="n">offer_env</span> <span class="o">=</span> <span class="n">acc</span><span class="o">.</span><span class="n">offer</span></span>
+<span class="ln" data-n="348">        <span class="k">if</span> <span class="n">offer_env</span><span class="o">.</span><span class="n">sender</span> <span class="o">!=</span> <span class="n">note</span><span class="o">.</span><span class="n">new_payee_id</span> <span class="ow">or</span> <span class="n">env</span><span class="o">.</span><span class="n">sender</span> <span class="o">!=</span> <span class="n">note</span><span class="o">.</span><span class="n">new_payee_id</span><span class="p">:</span></span>
+<span class="ln" data-n="349">            <span class="k">return</span> <span class="n">reject</span><span class="p">(</span><span class="s2">&quot;offer not issued by the notifying funder&quot;</span><span class="p">)</span></span>
+<span class="ln" data-n="350">        <span class="k">if</span> <span class="n">offer_env</span><span class="o">.</span><span class="n">body</span><span class="o">.</span><span class="n">invoice_hash</span> <span class="o">!=</span> <span class="n">p</span><span class="o">.</span><span class="n">invoice_hash</span> <span class="ow">or</span> <span class="n">note</span><span class="o">.</span><span class="n">invoice_hash</span> <span class="o">!=</span> <span class="n">p</span><span class="o">.</span><span class="n">invoice_hash</span><span class="p">:</span></span>
+<span class="ln" data-n="351">            <span class="k">return</span> <span class="n">reject</span><span class="p">(</span><span class="s2">&quot;invoice hash mismatch&quot;</span><span class="p">)</span></span>
+<span class="ln el" data-n="">        <span class="c1"># …</span></span>
+<span class="ln" data-n="353">            <span class="k">if</span> <span class="n">p</span><span class="o">.</span><span class="n">status</span> <span class="o">==</span> <span class="n">InvStatus</span><span class="o">.</span><span class="n">ASSIGNED</span><span class="p">:</span></span>
+<span class="ln" data-n="354">                <span class="k">return</span> <span class="n">reject</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;DOUBLE FINANCING: already assigned to </span><span class="si">{</span><span class="n">p</span><span class="o">.</span><span class="n">payee</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></span>
+<span class="ln" data-n="355">            <span class="k">if</span> <span class="n">p</span><span class="o">.</span><span class="n">status</span> <span class="o">==</span> <span class="n">InvStatus</span><span class="o">.</span><span class="n">PAID_EARLY</span><span class="p">:</span></span>
+<span class="ln" data-n="356">                <span class="k">return</span> <span class="n">reject</span><span class="p">(</span><span class="s2">&quot;DOUBLE FINANCING: invoice already paid early by buyer&quot;</span><span class="p">)</span></span>
+<span class="ln" data-n="357">            <span class="k">if</span> <span class="n">p</span><span class="o">.</span><span class="n">status</span> <span class="o">!=</span> <span class="n">InvStatus</span><span class="o">.</span><span class="n">APPROVED</span><span class="p">:</span></span>
+<span class="ln" data-n="358">                <span class="k">return</span> <span class="n">reject</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;invoice is </span><span class="si">{</span><span class="n">p</span><span class="o">.</span><span class="n">status</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></span>
+<span class="ln el" data-n="">        <span class="c1"># …</span></span>
+<span class="ln" data-n="363">        <span class="bp">self</span><span class="o">.</span><span class="n">decide</span><span class="p">(</span><span class="n">note</span><span class="o">.</span><span class="n">invoice_id</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;assignment acknowledged: will pay </span><span class="si">{</span><span class="n">note</span><span class="o">.</span><span class="n">new_payee_id</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">p</span><span class="o">.</span><span class="n">invoice</span><span class="o">.</span><span class="n">amount</span><span class="o">/</span><span class="mi">100</span><span class="si">:</span><span class="s2">,.2f</span><span class="si">}</span><span class="s2"> on </span><span class="si">{</span><span class="n">p</span><span class="o">.</span><span class="n">invoice</span><span class="o">.</span><span class="n">due_date</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></span>
+<span class="ln" data-n="364">        <span class="bp">self</span><span class="o">.</span><span class="n">send</span><span class="p">(</span></span>
+<span class="ln" data-n="365">            <span class="p">[</span><span class="n">note</span><span class="o">.</span><span class="n">new_payee_id</span><span class="p">,</span> <span class="n">p</span><span class="o">.</span><span class="n">invoice</span><span class="o">.</span><span class="n">supplier_id</span><span class="p">],</span></span>
+<span class="ln" data-n="366">            <span class="n">AssignmentAck</span><span class="p">(</span><span class="n">invoice_id</span><span class="o">=</span><span class="n">note</span><span class="o">.</span><span class="n">invoice_id</span><span class="p">,</span> <span class="n">invoice_hash</span><span class="o">=</span><span class="n">p</span><span class="o">.</span><span class="n">invoice_hash</span><span class="p">,</span> <span class="n">new_payee_id</span><span class="o">=</span><span class="n">note</span><span class="o">.</span><span class="n">new_payee_id</span><span class="p">,</span> <span class="n">amount</span><span class="o">=</span><span class="n">p</span><span class="o">.</span><span class="n">invoice</span><span class="o">.</span><span class="n">amount</span><span class="p">,</span> <span class="n">due_date</span><span class="o">=</span><span class="n">p</span><span class="o">.</span><span class="n">invoice</span><span class="o">.</span><span class="n">due_date</span><span class="p">),</span></span>
+<span class="ln" data-n="367">        <span class="p">)</span></span></code></pre>
+<figcaption><strong>The buyer node handling an assignment notice.</strong> It checks the embedded proof chain and the invoice hash, refuses any invoice that is already assigned or paid early, then signs one <code>AssignmentAck</code> to the funder and the supplier. Elided lines (<code># …</code>) are a switch used only by the adversarial test of a dishonest buyer.</figcaption>
+</figure>
     </div>
 
-    <div class="split">
-      <div>
-        <h3>What the log holds</h3>
-        <p class="muted">Each entry has a sequence number, the invoice hash, the buyer and funder ids, a digest of the signed acknowledgment, the previous entry’s hash, and the funder’s signature. No amounts or prices. Anyone can recompute the chain; altering, inserting, removing or reordering an entry is detected.</p>
-        <p class="muted small">Limitation: a log operator cannot forge or rewrite entries, but could withhold them. The production answer, as in Certificate Transparency, is several independent logs, mirrors and signed tree heads exchanged by gossip. The reference implementation runs a single in-process log.</p>
-        <p class="muted small">Every message is also signed over canonical JSON, recursively through embedded proofs, so tampering in transit, forged buyer approvals, and replayed notices are rejected.</p>
-      </div>
-      <div>
-        <div class="log" role="img" aria-label="Illustrative log: entry 41 records an acknowledgment of invoice 9f2c to Bank A, which funds. Entry 57 records an acknowledgment of the same invoice to Bank B; Bank B finds entry 41 and does not fund.">
-          <div class="entry"><span class="k">seq 41</span><span>inv 9f2c…a1 · bank-a</span><span class="verdict ok">no earlier entry: funds</span></div>
-          <div class="chain">↓ prev_hash links each entry to the one before</div>
-          <div class="entry"><span class="k">seq 42</span><span>inv 07be…5d · bank-b</span><span class="verdict ok">funds</span></div>
-          <div class="chain">↓ …</div>
-          <div class="entry hit"><span class="k">seq 57</span><span>inv 9f2c…a1 · bank-b</span><span class="verdict bad">earlier entry, seq 41: does not fund</span></div>
-        </div>
-        <p class="small muted" style="margin-top:.6rem">Illustrative entries. A funder publishes first, then checks, so of two funders racing on one invoice the later always sees the earlier.</p>
+    <div class="check">
+      <div class="check-head"><span class="num">2</span><div><h3>The supplier signs a representation</h3><p class="muted">Every <code>ACCEPT</code> carries the supplier’s signed statement that the invoice is not assigned or pledged. The protocol cannot see a factor or lender outside it; this does not prevent that, but it turns each acceptance into signed evidence that gives the funder recourse.</p></div></div>
+      <figure class="code">
+<div class="code-head"><span class="file">src/openfloat/messages.py</span><span class="lines"><a href="https://github.com/4rnaudD/openfloat/blob/49ca1548fbc558a0149b20252edaf09af646722c/src/openfloat/messages.py#L85-L94">L85&#8211;94</a> <span class="gh">on GitHub</span></span></div>
+<pre class="hl numbered" tabindex="0"><code><span class="ln" data-n="85"><span class="c1"># Supplier&#39;s signed representation in every ACCEPT (legal text in SPEC.md): the receivable has not</span></span>
+<span class="ln" data-n="86"><span class="c1"># been assigned, sold, pledged or otherwise encumbered in favour of anyone but the offeror.</span></span>
+<span class="ln" data-n="87"><span class="n">NOT_ASSIGNED_OR_PLEDGED</span> <span class="o">=</span> <span class="s2">&quot;NOT_ASSIGNED_OR_PLEDGED&quot;</span></span>
+<span class="ln" data-n="88"></span>
+<span class="ln" data-n="89"></span>
+<span class="ln" data-n="90"><span class="k">class</span> <span class="nc">Accept</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span></span>
+<span class="ln" data-n="91">    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;ACCEPT&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;ACCEPT&quot;</span></span>
+<span class="ln" data-n="92">    <span class="n">offer</span><span class="p">:</span> <span class="s2">&quot;Envelope&quot;</span>  <span class="c1"># the signed offer being accepted</span></span>
+<span class="ln" data-n="93">    <span class="n">supplier_id</span><span class="p">:</span> <span class="nb">str</span></span>
+<span class="ln" data-n="94">    <span class="n">representation</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;NOT_ASSIGNED_OR_PLEDGED&quot;</span><span class="p">]</span></span></code></pre>
+<figcaption>The representation is a required field of the signed <code>Accept</code> body: an acceptance without it does not validate, and altering it after signing breaks the signature.</figcaption>
+</figure>
+    </div>
+
+    <div class="check">
+      <div class="check-head"><span class="num">3</span><div><h3>Acknowledgments are published, then checked</h3><p class="muted">A dishonest buyer could acknowledge the same invoice to two funders, each seeing only its own. Funders publish every acknowledgment they rely on to an append-only, hash-chained log, then check it.</p></div></div>
+      <figure class="code">
+<div class="code-head"><span class="file">src/openfloat/nodes.py</span><span class="lines"><a href="https://github.com/4rnaudD/openfloat/blob/49ca1548fbc558a0149b20252edaf09af646722c/src/openfloat/nodes.py#L478-L495">L478&#8211;495</a> <span class="gh">on GitHub</span></span></div>
+<pre class="hl numbered" tabindex="0"><code><span class="ln" data-n="478">        <span class="k">if</span> <span class="n">ack</span><span class="o">.</span><span class="n">invoice_id</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">pending</span> <span class="ow">or</span> <span class="n">ack</span><span class="o">.</span><span class="n">new_payee_id</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">:</span></span>
+<span class="ln" data-n="479">            <span class="k">return</span></span>
+<span class="ln" data-n="480">        <span class="n">o</span><span class="p">,</span> <span class="n">u</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">pending</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">ack</span><span class="o">.</span><span class="n">invoice_id</span><span class="p">)</span></span>
+<span class="ln" data-n="481">        <span class="k">if</span> <span class="n">env</span><span class="o">.</span><span class="n">sender</span> <span class="o">!=</span> <span class="n">u</span><span class="o">.</span><span class="n">buyer_id</span> <span class="ow">or</span> <span class="n">ack</span><span class="o">.</span><span class="n">invoice_hash</span> <span class="o">!=</span> <span class="n">u</span><span class="o">.</span><span class="n">invoice_hash</span> <span class="ow">or</span> <span class="n">ack</span><span class="o">.</span><span class="n">amount</span> <span class="o">!=</span> <span class="n">u</span><span class="o">.</span><span class="n">amount</span><span class="p">:</span></span>
+<span class="ln" data-n="482">            <span class="bp">self</span><span class="o">.</span><span class="n">exposure</span><span class="p">[</span><span class="n">u</span><span class="o">.</span><span class="n">buyer_id</span><span class="p">]</span> <span class="o">-=</span> <span class="n">u</span><span class="o">.</span><span class="n">amount</span></span>
+<span class="ln" data-n="483">            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">decide</span><span class="p">(</span><span class="n">o</span><span class="o">.</span><span class="n">invoice_id</span><span class="p">,</span> <span class="s2">&quot;ack does not match undertaking; not funding&quot;</span><span class="p">)</span></span>
+<span class="ln" data-n="484">        <span class="n">entry</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">net</span><span class="o">.</span><span class="n">ack_log</span><span class="o">.</span><span class="n">publish</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">identity</span><span class="p">,</span> <span class="n">env</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">net</span><span class="o">.</span><span class="n">today</span><span class="p">)</span></span>
+<span class="ln" data-n="485">        <span class="n">earlier</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">net</span><span class="o">.</span><span class="n">ack_log</span><span class="o">.</span><span class="n">conflicts</span><span class="p">(</span><span class="n">entry</span><span class="p">)</span></span>
+<span class="ln" data-n="486">        <span class="k">if</span> <span class="n">earlier</span><span class="p">:</span></span>
+<span class="ln" data-n="487">            <span class="bp">self</span><span class="o">.</span><span class="n">exposure</span><span class="p">[</span><span class="n">u</span><span class="o">.</span><span class="n">buyer_id</span><span class="p">]</span> <span class="o">-=</span> <span class="n">u</span><span class="o">.</span><span class="n">amount</span></span>
+<span class="ln" data-n="488">            <span class="bp">self</span><span class="o">.</span><span class="n">alarms</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">o</span><span class="o">.</span><span class="n">invoice_id</span><span class="p">)</span></span>
+<span class="ln" data-n="489">            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">decide</span><span class="p">(</span><span class="n">o</span><span class="o">.</span><span class="n">invoice_id</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;EQUIVOCATION: buyer already acknowledged </span><span class="si">{</span><span class="n">earlier</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">funder_id</span><span class="si">}</span><span class="s2"> &quot;</span></span>
+<span class="ln" data-n="490">                                             <span class="sa">f</span><span class="s2">&quot;(log entry #</span><span class="si">{</span><span class="n">earlier</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">seq</span><span class="si">}</span><span class="s2">); not funding&quot;</span><span class="p">)</span></span>
+<span class="ln" data-n="491">        <span class="bp">self</span><span class="o">.</span><span class="n">decide</span><span class="p">(</span><span class="n">o</span><span class="o">.</span><span class="n">invoice_id</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;published ack to log (entry #</span><span class="si">{</span><span class="n">entry</span><span class="o">.</span><span class="n">seq</span><span class="si">}</span><span class="s2">); no earlier acknowledgment&quot;</span><span class="p">)</span></span>
+<span class="ln" data-n="492">        <span class="bp">self</span><span class="o">.</span><span class="n">book</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">o</span><span class="p">,</span> <span class="n">u</span><span class="p">))</span></span>
+<span class="ln" data-n="493">        <span class="bp">self</span><span class="o">.</span><span class="n">expect</span><span class="p">(</span><span class="n">o</span><span class="o">.</span><span class="n">invoice_id</span><span class="p">,</span> <span class="n">u</span><span class="o">.</span><span class="n">buyer_id</span><span class="p">,</span> <span class="n">u</span><span class="o">.</span><span class="n">amount</span><span class="p">,</span> <span class="n">u</span><span class="o">.</span><span class="n">due_date</span><span class="p">,</span> <span class="s2">&quot;maturity&quot;</span><span class="p">)</span></span>
+<span class="ln" data-n="494">        <span class="bp">self</span><span class="o">.</span><span class="n">decide</span><span class="p">(</span><span class="n">o</span><span class="o">.</span><span class="n">invoice_id</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;buyer acknowledged; funding </span><span class="si">{</span><span class="n">o</span><span class="o">.</span><span class="n">advance</span><span class="o">/</span><span class="mi">100</span><span class="si">:</span><span class="s2">,.2f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></span>
+<span class="ln" data-n="495">        <span class="bp">self</span><span class="o">.</span><span class="n">send</span><span class="p">(</span></span></code></pre>
+<figcaption><strong>Publish, then check.</strong> The funder only reaches <code>SettlementInstruction</code> if the acknowledgment matches the undertaking it priced and the log holds no earlier acknowledgment of the same invoice to another funder.</figcaption>
+</figure>
+      <figure class="code">
+<div class="code-head"><span class="file">src/openfloat/acklog.py</span><span class="lines"><a href="https://github.com/4rnaudD/openfloat/blob/49ca1548fbc558a0149b20252edaf09af646722c/src/openfloat/acklog.py#L75-L78">L75&#8211;78</a> <span class="gh">on GitHub</span></span></div>
+<pre class="hl numbered" tabindex="0"><code><span class="ln" data-n="75">    <span class="k">def</span> <span class="nf">conflicts</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">entry</span><span class="p">:</span> <span class="n">AckLogEntry</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">AckLogEntry</span><span class="p">]:</span></span>
+<span class="ln" data-n="76"><span class="w">        </span><span class="sd">&quot;&quot;&quot;Earlier entries for the same invoice from a different funder: buyer equivocation.&quot;&quot;&quot;</span></span>
+<span class="ln" data-n="77">        <span class="k">return</span> <span class="p">[</span><span class="n">e</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">for_invoice</span><span class="p">(</span><span class="n">entry</span><span class="o">.</span><span class="n">invoice_hash</span><span class="p">)</span> <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">seq</span> <span class="o">&lt;</span> <span class="n">entry</span><span class="o">.</span><span class="n">seq</span> <span class="ow">and</span> <span class="n">e</span><span class="o">.</span><span class="n">funder_id</span> <span class="o">!=</span> <span class="n">entry</span><span class="o">.</span><span class="n">funder_id</span><span class="p">]</span></span>
+<span class="ln" data-n="78"></span></code></pre>
+<figcaption>The conflict rule, in full. Because each funder publishes before checking, of two funders racing on one invoice the later always sees the earlier.</figcaption>
+</figure>
+      <div class="split narrow-split">
+        <p class="muted small"><strong>What the log holds.</strong> Each entry has a sequence number, the invoice hash, the buyer and funder ids, a digest of the signed acknowledgment, the previous entry’s hash, and the funder’s signature. No amounts or prices. Anyone can recompute the chain; altering, inserting, removing or reordering an entry is detected.</p>
+        <p class="muted small"><strong>Limitation.</strong> A log operator cannot forge or rewrite entries, but could withhold them. The production answer, as in Certificate Transparency, is several independent logs, mirrors and signed tree heads exchanged by gossip. The reference implementation runs a single in-process log.</p>
       </div>
     </div>
   </div>
 </section>
 
-<!-- 5. RAILS -->
+<!-- 6. RAILS -->
 <section id="rails">
   <div class="wrap">
     <p class="eyebrow">Settlement</p>
     <h2>Money moves on rails you already have.</h2>
-    <p class="lead">Nodes never move money. They emit settlement instructions to the banks participants already use, then exchange signed confirmations of what those banks report. Each node speaks only for its own bank.</p>
+    <p class="lead">Nodes never move money. The payee named in the buyer’s acknowledgment is who gets paid; nodes emit settlement instructions to the banks participants already use, then exchange signed confirmations of what those banks report.</p>
 
     <div class="rail" role="list">
       <div class="step" role="listitem"><b>Instruction</b><span>The payer’s node emits a signed settlement instruction</span></div>
@@ -435,39 +624,188 @@
       <div class="step" role="listitem"><b>Payee confirms</b><span><code>PAYMENT_RECEIVED</code> from its bank’s camt.054 credit</span></div>
     </div>
 
-    <div class="grid grid-2">
-      <div class="card">
+    <div class="split">
+      <figure class="code">
+        <div class="code-head"><span class="file">pain.001 written by bank-a’s node</span><span class="lines">excerpt, default scenario</span></div>
+<pre class="hl" tabindex="0" aria-label="Excerpt of a generated pain.001 XML payment file"><code><span class="cp">&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;</span>
+<span class="nt">&lt;Document</span><span class="w"> </span><span class="na">xmlns=</span><span class="s">&quot;urn:iso:std:iso:20022:tech:xsd:pain.001.001.09&quot;</span><span class="nt">&gt;</span>
+<span class="w">  </span><span class="nt">&lt;CstmrCdtTrfInitn&gt;</span>
+<span class="w">    </span><span class="nt">&lt;GrpHdr&gt;</span>
+<span class="w">      </span><span class="nt">&lt;MsgId&gt;</span>OF2646ADBB4250D4619D4D<span class="nt">&lt;/MsgId&gt;</span>
+<span class="w">      </span><span class="nt">&lt;CreDtTm&gt;</span>2026-01-01T00:00:00<span class="nt">&lt;/CreDtTm&gt;</span>
+<span class="w">      </span><span class="nt">&lt;NbOfTxs&gt;</span>2<span class="nt">&lt;/NbOfTxs&gt;</span>
+<span class="w">      </span><span class="nt">&lt;CtrlSum&gt;</span>26448.16<span class="nt">&lt;/CtrlSum&gt;</span>
+<span class="w">      </span><span class="cm">&lt;!-- … --&gt;</span>
+<span class="w">    </span><span class="nt">&lt;/GrpHdr&gt;</span>
+<span class="w">    </span><span class="nt">&lt;PmtInf&gt;</span>
+<span class="w">      </span><span class="cm">&lt;!-- … --&gt;</span>
+<span class="w">      </span><span class="nt">&lt;ReqdExctnDt&gt;</span>
+<span class="w">        </span><span class="nt">&lt;Dt&gt;</span>2026-11-02<span class="nt">&lt;/Dt&gt;</span>
+<span class="w">      </span><span class="nt">&lt;/ReqdExctnDt&gt;</span>
+<span class="w">      </span><span class="cm">&lt;!-- … --&gt;</span>
+<span class="w">      </span><span class="nt">&lt;CdtTrfTxInf&gt;</span>
+<span class="w">        </span><span class="nt">&lt;PmtId&gt;</span>
+<span class="w">          </span><span class="nt">&lt;EndToEndId&gt;</span>bdea7b80600f430d<span class="nt">&lt;/EndToEndId&gt;</span>
+<span class="w">        </span><span class="nt">&lt;/PmtId&gt;</span>
+<span class="w">        </span><span class="cm">&lt;!-- … --&gt;</span></code></pre>
+        <figcaption>Generated by <a href="https://github.com/4rnaudD/openfloat/blob/main/src/openfloat/iso20022.py">iso20022.py</a>. Account numbers and BICs in these files are synthetic placeholders. Elided parts marked <code>&lt;!-- … --&gt;</code>.</figcaption>
+      </figure>
+      <div>
         <h3>One reference end to end</h3>
-        <p>The instruction’s message id travels as the pain.001 <code>EndToEndId</code> through the bank status report and the credit notification, so every bank movement maps to exactly one protocol instruction.</p>
-      </div>
-      <div class="card">
-        <h3>Missing payments are evidenced</h3>
-        <p>Every payee tracks what it expects. If no matching credit arrives by the due date plus a grace period, its node sends a signed <code>PAYMENT_OVERDUE</code>. Together with the buyer’s undertaking or acknowledgment, that supports enforcement under the applicable law.</p>
+        <p class="muted">The instruction’s message id travels as the pain.001 <code>EndToEndId</code> through the bank status report and the credit notification, so every bank movement maps to exactly one protocol instruction.</p>
+        <h3 class="mt">Missing payments are evidenced</h3>
+        <p class="muted">Every payee tracks what it expects. If no matching credit arrives by the due date plus a grace period, its node sends a signed <code>PAYMENT_OVERDUE</code>. With the buyer’s undertaking or acknowledgment, that supports enforcement under the applicable law.</p>
+        <h3 class="mt">Where things stand</h3>
+        <ul class="plain">
+          <li>The files are well-formed pain.001.001.09 but not yet validated against the official XSD.</li>
+          <li>Mock bank rails stand in for participants’ banks in the simulation. No real money moves.</li>
+        </ul>
       </div>
     </div>
 
     <p class="principle">The protocol coordinates and evidences obligations. Banks move money. The law enforces obligations.</p>
 
-    <div class="split">
-      <div>
-        <h3>Deliberately out of scope</h3>
-        <ul class="plain">
-          <li><strong>Mechanisms that compel payment</strong>, such as direct-debit mandates, a bank acting as paying agent, or programmable money and atomic settlement. They depend on jurisdiction and licensing, so they are left to bilateral arrangements between participants and their banks.</li>
-          <li><strong>Card issuers as funders.</strong> A card issuer lends to the buyer, and a card payment extinguishes the invoice rather than assigning it. A future version may model card as a buyer-side payment option.</li>
-        </ul>
-      </div>
-      <div>
-        <h3>Where things stand</h3>
-        <ul class="plain">
-          <li>The reference implementation writes well-formed pain.001.001.09 files; they are not yet validated against the official XSD.</li>
-          <li>Account and BIC data are synthetic placeholders. Mock bank rails stand in for participants’ banks in the simulation. No real money moves.</li>
-        </ul>
-      </div>
+    <div class="oos">
+      <h3>Deliberately out of scope</h3>
+      <ul class="plain">
+        <li><strong>Mechanisms that compel payment</strong>, such as direct-debit mandates, a bank acting as paying agent, or programmable money and atomic settlement. They depend on jurisdiction and licensing, so they are left to bilateral arrangements between participants and their banks.</li>
+        <li><strong>Card issuers as funders.</strong> A card issuer lends to the buyer, and a card payment extinguishes the invoice rather than assigning it. A future version may model card as a buyer-side payment option.</li>
+      </ul>
     </div>
   </div>
 </section>
 
-<!-- 6. PROTOCOL NOT PLATFORM -->
+<!-- 7. TESTS -->
+<section id="tests">
+  <div class="wrap">
+    <p class="eyebrow">Tests as evidence</p>
+    <h2>21 tests. Most of them are attacks.</h2>
+    <div class="tests-layout">
+      <p class="lead">Each claim on this page has a test that tries to break it: tampering, forgery, replay, double financing, a dishonest buyer, a rewritten log, missing payments. Every test name below links to its code.</p>
+      <figure class="term tests-term">
+        <div class="term-bar" aria-hidden="true"><i></i><i></i><i></i><span>openfloat</span></div>
+<pre tabindex="0" aria-label="Terminal: pytest run, 21 passed"><code><span class="tp">$</span> <span class="tcmd">uv run pytest -q</span>
+<span class="to">.....................                                                    [100%]</span>
+<span class="to">21 passed in 3.73s</span></code></pre>
+        <figcaption>Real run at commit <code>49ca154</code>. Two of the tests are property-based (Hypothesis) and run many random cases each.</figcaption>
+      </figure>
+    </div>
+
+    <div class="testlist">
+        <div>
+          <h3>Signatures</h3>
+          <ul class="plain">
+            <li><a href="https://github.com/4rnaudD/openfloat/blob/49ca1548fbc558a0149b20252edaf09af646722c/tests/test_protocol.py#L52-L59">Tampered message</a>: amount changed in transit, rejected by the network</li>
+            <li><a href="https://github.com/4rnaudD/openfloat/blob/49ca1548fbc558a0149b20252edaf09af646722c/tests/test_protocol.py#L62-L72">Forged undertaking</a>: supplier signs its own “buyer approval”, funder declines</li>
+            <li><a href="https://github.com/4rnaudD/openfloat/blob/49ca1548fbc558a0149b20252edaf09af646722c/tests/test_protocol.py#L75-L80">Unknown signer</a>: key not in the directory, rejected</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Double financing</h3>
+          <ul class="plain">
+            <li><a href="https://github.com/4rnaudD/openfloat/blob/49ca1548fbc558a0149b20252edaf09af646722c/tests/test_protocol.py#L86-L94">Double-dipping supplier</a> is funded exactly once</li>
+            <li><a href="https://github.com/4rnaudD/openfloat/blob/49ca1548fbc558a0149b20252edaf09af646722c/tests/test_protocol.py#L97-L104">Replayed assignment notice</a> is rejected</li>
+            <li><a href="https://github.com/4rnaudD/openfloat/blob/49ca1548fbc558a0149b20252edaf09af646722c/tests/test_protocol.py#L107-L116">Funder reusing another funder’s acceptance</a> cannot claim the invoice</li>
+            <li><a href="https://github.com/4rnaudD/openfloat/blob/49ca1548fbc558a0149b20252edaf09af646722c/tests/test_protocol.py#L119-L129">Expired offer</a> cannot be accepted</li>
+            <li><a href="https://github.com/4rnaudD/openfloat/blob/49ca1548fbc558a0149b20252edaf09af646722c/tests/test_protocol.py#L135-L148">Representation</a> is required and cannot be altered after signing</li>
+            <li><a href="https://github.com/4rnaudD/openfloat/blob/49ca1548fbc558a0149b20252edaf09af646722c/tests/test_protocol.py#L151-L161">Equivocating buyer</a> acknowledges twice; the log stops the second funder</li>
+            <li><a href="https://github.com/4rnaudD/openfloat/blob/49ca1548fbc558a0149b20252edaf09af646722c/tests/test_protocol.py#L164-L175">Log tampering</a>: rewritten, reordered or dropped entries are detected</li>
+            <li><a href="https://github.com/4rnaudD/openfloat/blob/49ca1548fbc558a0149b20252edaf09af646722c/tests/test_protocol.py#L178-L184">Invoice already in the log</a> is declined by a new funder</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Money movement</h3>
+          <ul class="plain">
+            <li><a href="https://github.com/4rnaudD/openfloat/blob/49ca1548fbc558a0149b20252edaf09af646722c/tests/test_protocol.py#L190-L201">Every bank payment</a> is confirmed by payer and payee, same <code>EndToEndId</code></li>
+            <li><a href="https://github.com/4rnaudD/openfloat/blob/49ca1548fbc558a0149b20252edaf09af646722c/tests/test_protocol.py#L204-L213">Late buyer</a> gets a signed overdue notice, then pays late</li>
+            <li><a href="https://github.com/4rnaudD/openfloat/blob/49ca1548fbc558a0149b20252edaf09af646722c/tests/test_protocol.py#L216-L232">Payment claimed but never made</a> goes overdue</li>
+            <li><a href="https://github.com/4rnaudD/openfloat/blob/49ca1548fbc558a0149b20252edaf09af646722c/tests/test_protocol.py#L235-L246">Credit with the wrong amount</a> is not treated as payment</li>
+            <li><a href="https://github.com/4rnaudD/openfloat/blob/49ca1548fbc558a0149b20252edaf09af646722c/tests/test_protocol.py#L249-L262">pain.001 contents</a> match the instructions: count, control sum, ids</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Policy and invariants</h3>
+          <ul class="plain">
+            <li><a href="https://github.com/4rnaudD/openfloat/blob/49ca1548fbc558a0149b20252edaf09af646722c/tests/test_protocol.py#L268-L272">Invoice rules</a> and <a href="https://github.com/4rnaudD/openfloat/blob/49ca1548fbc558a0149b20252edaf09af646722c/tests/test_protocol.py#L275-L282">funder credit limits</a> are enforced</li>
+            <li><a href="https://github.com/4rnaudD/openfloat/blob/49ca1548fbc558a0149b20252edaf09af646722c/tests/test_protocol.py#L288-L311">Random networks</a> (property-based): every invoice paid to its supplier once and by the buyer once, all exposure released, never costlier than factoring</li>
+            <li><a href="https://github.com/4rnaudD/openfloat/blob/49ca1548fbc558a0149b20252edaf09af646722c/tests/test_protocol.py#L317-L336">Optimiser</a> (property-based) never breaches the cash floor and matches or beats a greedy baseline; it <a href="https://github.com/4rnaudD/openfloat/blob/49ca1548fbc558a0149b20252edaf09af646722c/tests/test_protocol.py#L339-L342">skips discounts below the cash yield</a></li>
+          </ul>
+        </div>
+      </div>
+  </div>
+</section>
+
+<!-- 8. RESULTS -->
+<section id="results">
+  <div class="wrap">
+    <p class="eyebrow">Results on synthetic data</p>
+    <h2>What the simulation shows.</h2>
+    <p class="lead">Synthetic scenario: about 185 invoices over 30 days, 60% of suppliers wanting early payment, supplier factoring rates drawn from 20–45% APR, banks at 5.5% and 6.2%, 5% of suppliers attempting to double-finance. Seeds 7, 11 and 23.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th scope="col">Metric</th><th scope="col">Result</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Early-payment requests financed</th><td>102–112 per seed, <strong>100%</strong> of requests</td></tr>
+          <tr><th scope="row">Route mix</th><td>51–56% buyer cash, the rest banks</td></tr>
+          <tr><th scope="row"><strong>Supplier financing cost vs. own factoring</strong></th><td><strong>~$19.3k vs ~$110k on ~$2.45M financed</strong> (seed 7), 82–85% lower across seeds</td></tr>
+          <tr><th scope="row">Double-financing attempts</th><td>0–17 per seed (depends on which suppliers draw as double-dippers), <strong>all blocked</strong></td></tr>
+          <tr><th scope="row">Days the buyer fell below its cash floor <em>because of early payments</em></th><td><strong>0–1 with forecast</strong>, 10–41 without</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="caveat">All figures come from synthetic data with the stated assumptions. They are not a claim about any real programme. Reproduce seed 7 with <code>uv run openfloat simulate</code>.</p>
+
+    <div class="callout" style="margin-top:1.5rem; border-left-color: var(--orange);">
+      <h3>Where it fails</h3>
+      <p>The buyer’s payables forecast is a simple run-rate. When actual invoices exceed it, early payments can still push the balance under the floor for a few days. A better forecast, or a safety margin on the floor, would fix that.</p>
+    </div>
+
+    <!-- calculator -->
+    <div class="calc-wrap" id="calculator">
+      <div class="calc-intro">
+        <h3>Try the numbers on one invoice</h3>
+        <p class="muted">Same simple-interest formula as the code: amount × APR × days / 365.</p>
+        <figure class="code">
+<div class="code-head"><span class="file">src/openfloat/nodes.py</span><span class="lines"><a href="https://github.com/4rnaudD/openfloat/blob/49ca1548fbc558a0149b20252edaf09af646722c/src/openfloat/nodes.py#L43-L45">L43&#8211;45</a> <span class="gh">on GitHub</span></span></div>
+<pre class="hl numbered" tabindex="0"><code><span class="ln" data-n="43"><span class="k">def</span> <span class="nf">discounted</span><span class="p">(</span><span class="n">amount</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">apr</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">days</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span></span>
+<span class="ln" data-n="44"><span class="w">    </span><span class="sd">&quot;&quot;&quot;Advance after a simple-interest discount at `apr` for `days`.&quot;&quot;&quot;</span></span>
+<span class="ln" data-n="45">    <span class="k">return</span> <span class="n">amount</span> <span class="o">-</span> <span class="nb">round</span><span class="p">(</span><span class="n">amount</span> <span class="o">*</span> <span class="n">apr</span> <span class="o">*</span> <span class="nb">max</span><span class="p">(</span><span class="n">days</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="o">/</span> <span class="mi">365</span><span class="p">)</span></span></code></pre>
+<figcaption>The pricing formula the calculator uses: a simple-interest discount on the invoice amount.</figcaption>
+</figure>
+      </div>
+      <form class="calc" id="calc" action="#calculator" novalidate>
+        <div class="calc-fields">
+          <label for="c-amount">Invoice amount
+            <input id="c-amount" name="amount" type="number" inputmode="decimal" min="0" step="1000" value="100000">
+          </label>
+          <label for="c-days">Days paid early
+            <input id="c-days" name="days" type="number" inputmode="numeric" min="0" max="365" step="1" value="60">
+          </label>
+          <label for="c-fact">Factoring APR (%)
+            <input id="c-fact" name="fact" type="number" inputmode="decimal" min="0" step="0.5" value="30" aria-describedby="c-fact-hint">
+            <span class="hint" id="c-fact-hint">The supplier’s own rate</span>
+          </label>
+          <label for="c-fund">Funder APR (%)
+            <input id="c-fund" name="fund" type="number" inputmode="decimal" min="0" step="0.1" value="5.5" aria-describedby="c-fund-hint">
+            <span class="hint" id="c-fund-hint">Illustrative, investment-grade buyer</span>
+          </label>
+        </div>
+        <div class="calc-out" aria-live="polite">
+          <div class="row"><span>Cost via own factoring</span><output id="o-fact" for="c-amount c-days c-fact">4,931.51</output></div>
+          <div class="bar"><i class="b-fact" id="b-fact" style="width:100%"></i></div>
+          <div class="row"><span>Cost via OpenFloat</span><output id="o-fund" for="c-amount c-days c-fund">904.11</output></div>
+          <div class="bar"><i class="b-fund" id="b-fund" style="width:18.3%"></i></div>
+          <div class="row total"><span>Supplier saving</span><output id="o-save" for="c-fact c-fund">4,027.40</output></div>
+          <p class="hint" id="c-note">Example: 100,000 paid 60 days early at 30% vs 5.5% APR. Simple interest, no fees; a real funder’s quote depends on the buyer’s credit and its own policy.</p>
+          <noscript><p class="hint">JavaScript is off, so the figures above are a fixed example.</p></noscript>
+        </div>
+      </form>
+    </div>
+  </div>
+</section>
+
+<!-- 9. PROTOCOL NOT PLATFORM -->
 <section id="protocol">
   <div class="wrap">
     <p class="eyebrow">Protocol, not platform</p>
@@ -491,7 +829,7 @@
   </div>
 </section>
 
-<!-- 7. PARTICIPANTS -->
+<!-- 10. PARTICIPANTS -->
 <section id="participants">
   <div class="wrap">
     <p class="eyebrow">For each participant</p>
@@ -526,18 +864,18 @@
   </div>
 </section>
 
-<!-- 8. SEE IT RUN -->
+<!-- 11. SEE IT RUN -->
 <section id="demo">
   <div class="wrap">
     <p class="eyebrow">See it run</p>
-    <h2>A reference implementation you can run locally.</h2>
-    <p class="lead">The dashboard walks through one buyer, two banks and two suppliers exchanging real signed messages, step by step. One supplier tries to finance the same invoice twice and a message is tampered with in transit; both are rejected.</p>
+    <h2>The dashboard, on your machine.</h2>
+    <p class="lead"><code>uv run openfloat dashboard</code> walks through one buyer, two banks and two suppliers exchanging real signed messages, step by step. One supplier tries to finance the same invoice twice and a message is tampered with in transit; both are rejected.</p>
 
     <figure class="shot">
       <img src="assets/walkthrough.png" loading="lazy" alt="OpenFloat dashboard walkthrough: a step-by-step list of signed messages between buyer, suppliers and banks, with a second financing claim on the same invoice shown as rejected.">
       <figcaption>Walkthrough: signed message flow, including a blocked double-financing claim.</figcaption>
     </figure>
-    <div>
+    <div class="shots-2">
       <figure class="shot">
         <img src="assets/outcome.png" loading="lazy" alt="Network outcome view: KPI cards for financed requests, supplier savings and blocked double-financing attempts, with charts of the buyer's cash balance against its floor and of who funded early payments.">
         <figcaption>Network outcome on synthetic data: KPIs, cash against floor, funding mix.</figcaption>
@@ -547,47 +885,10 @@
         <figcaption>Maturity with a late buyer: the payee sends a signed overdue notice.</figcaption>
       </figure>
     </div>
-
-    <div class="code-card">
-      <p class="code-title">Quickstart (Python 3.12+ and uv)</p>
-<pre><code>git clone https://github.com/4rnaudD/openfloat &amp;&amp; cd openfloat
-uv sync
-uv run openfloat dashboard   <span class="c"># walkthrough, network outcome, message log</span>
-uv run openfloat simulate    <span class="c"># synthetic network: 1 buyer, 25 suppliers, 2 banks</span>
-uv run pytest                <span class="c"># protocol and invariant tests</span></code></pre>
-    </div>
   </div>
 </section>
 
-<!-- 9. RESULTS -->
-<section id="results">
-  <div class="wrap">
-    <p class="eyebrow">Results on synthetic data</p>
-    <h2>What the simulation shows.</h2>
-    <p class="lead">Synthetic scenario: about 185 invoices over 30 days, 60% of suppliers wanting early payment, supplier factoring rates drawn from 20–45% APR, banks at 5.5% and 6.2%, 5% of suppliers attempting to double-finance. Seeds 7, 11 and 23.</p>
-
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th scope="col">Metric</th><th scope="col">Result</th></tr></thead>
-        <tbody>
-          <tr><th scope="row">Early-payment requests financed</th><td>102–112 per seed, <strong>100%</strong> of requests</td></tr>
-          <tr><th scope="row">Route mix</th><td>51–56% buyer cash, the rest banks</td></tr>
-          <tr><th scope="row"><strong>Supplier financing cost vs. own factoring</strong></th><td><strong>~$19.3k vs ~$110k on ~$2.45M financed</strong> (seed 7), 82–85% lower across seeds</td></tr>
-          <tr><th scope="row">Double-financing attempts</th><td>0–17 per seed (depends on which suppliers draw as double-dippers), <strong>all blocked</strong></td></tr>
-          <tr><th scope="row">Days the buyer fell below its cash floor <em>because of early payments</em></th><td><strong>0–1 with forecast</strong>, 10–41 without</td></tr>
-        </tbody>
-      </table>
-    </div>
-    <p class="caveat">All figures come from synthetic data with the stated assumptions. They are not a claim about any real programme.</p>
-
-    <div class="callout" style="margin-top:1.5rem; border-left-color: var(--orange);">
-      <h3>Where it fails</h3>
-      <p>The buyer’s payables forecast is a simple run-rate. When actual invoices exceed it, early payments can still push the balance under the floor for a few days. A better forecast, or a safety margin on the floor, would fix that.</p>
-    </div>
-  </div>
-</section>
-
-<!-- 10. ROADMAP -->
+<!-- 12. ROADMAP -->
 <section id="roadmap">
   <div class="wrap">
     <p class="eyebrow">Roadmap and open questions</p>
@@ -618,11 +919,11 @@ uv run pytest                <span class="c"># protocol and invariant tests</spa
 
     <div class="cta">
       <div>
-        <h2>Review it, implement it, or tell us where it breaks.</h2>
-        <p class="muted">Read the specification, build a node against it, or open an issue with a question, a flaw, or a use case it does not cover.</p>
+        <h2>Read it, run it, or tell us where it breaks.</h2>
+        <p class="muted">Clone the code, build a node against the specification, or open an issue with a question, a flaw, or a use case it does not cover.</p>
       </div>
       <div class="actions">
-        <a class="btn btn-primary" href="https://github.com/4rnaudD/openfloat/blob/main/SPEC.md">Read the spec</a>
+        <a class="btn btn-primary" href="https://github.com/4rnaudD/openfloat">View the code on GitHub</a>
         <a class="btn btn-secondary" href="https://github.com/4rnaudD/openfloat/issues">Open an issue</a>
       </div>
     </div>
@@ -651,12 +952,42 @@ uv run pytest                <span class="c"># protocol and invariant tests</spa
   <div class="wrap">
     <span>OpenFloat · Draft <code>openfloat/0.1</code> · Code <a href="https://github.com/4rnaudD/openfloat/blob/main/LICENSE">Apache-2.0</a> · Specification CC BY 4.0</span>
     <nav aria-label="Footer">
-      <a href="https://github.com/4rnaudD/openfloat/blob/main/SPEC.md">Specification</a>
       <a href="https://github.com/4rnaudD/openfloat">GitHub</a>
+      <a href="https://github.com/4rnaudD/openfloat/blob/main/SPEC.md">Specification</a>
       <a href="https://github.com/4rnaudD/openfloat/issues">Issues</a>
       <a href="https://github.com/4rnaudD/openfloat/blob/main/docs/market-context.md">Market sources</a>
     </nav>
   </div>
 </footer>
+
+<script>
+(function () {
+  var f = document.getElementById("calc");
+  if (!f) return;
+  var $ = function (id) { return document.getElementById(id); };
+  var fmt = new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  function num(id) { var v = parseFloat($(id).value); return isFinite(v) && v >= 0 ? v : NaN; }
+  // Mirrors discounted() in src/openfloat/nodes.py: round(amount * apr * days / 365), in cents.
+  function cost(amount, aprPct, days) { return Math.round(amount * 100 * (aprPct / 100) * days / 365) / 100; }
+  function update() {
+    var a = num("c-amount"), d = Math.min(num("c-days"), 365), fa = num("c-fact"), fu = num("c-fund");
+    if ([a, d, fa, fu].some(isNaN)) {
+      ["o-fact", "o-fund", "o-save"].forEach(function (id) { $(id).textContent = "–"; });
+      $("c-note").textContent = "Enter non-negative numbers in every field.";
+      return;
+    }
+    var cf = cost(a, fa, d), co = cost(a, fu, d), max = Math.max(cf, co) || 1;
+    $("o-fact").textContent = fmt.format(cf);
+    $("o-fund").textContent = fmt.format(co);
+    $("o-save").textContent = fmt.format(cf - co);
+    $("b-fact").style.width = (cf / max * 100) + "%";
+    $("b-fund").style.width = (co / max * 100) + "%";
+    $("c-note").textContent = "Simple interest, no fees; a real funder’s quote depends on the buyer’s credit and its own policy.";
+  }
+  f.addEventListener("input", update);
+  f.addEventListener("submit", function (e) { e.preventDefault(); update(); });
+  update();
+})();
+</script>
 </body>
 </html>
