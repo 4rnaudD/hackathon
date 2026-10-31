@@ -24,31 +24,16 @@ from openfloat.nodes import (
 )
 from openfloat.sim import ScenarioConfig, _baseline_path, build, evaluate
 
-# reference palette (light): categorical slots 1-2, ink and chrome
-BLUE, ORANGE = "#2a78d6", "#eb6834"
-INK, INK_2, MUTED, GRID, AXIS = "#0b0b0b", "#52514e", "#898781", "#e1e0d9", "#c3c2b7"
-FONT = 'system-ui, -apple-system, "Segoe UI", sans-serif'
+from openfloat.dashboard_charts import cost_scatter, exposure_chart, weekly_sources
+from openfloat.dashboard_style import (
+    AXIS, BLUE, CRITICAL, CSS, INK, INK_2, MUTED, ORANGE, SURFACE, chart_theme, money,
+)
 
 SERIES_ACTUAL, SERIES_BASE = "With early payments", "All paid on due date"
 ROUTE_LABEL = {"BUYER_DISCOUNT": "Buyer's own cash", "FUNDER": "Bank"}
 
 st.set_page_config(page_title="OpenFloat", page_icon="◐", layout="wide")
-
-
-def money(cents: float, dp: int = 0) -> str:
-    return f"{cents / 100:,.{dp}f}"
-
-
-def chart_theme(chart: alt.Chart) -> alt.Chart:
-    return (
-        chart.configure(font=FONT, background="#fcfcfb")
-        .configure_view(stroke=None)
-        .configure_axis(
-            gridColor=GRID, gridWidth=1, domainColor=AXIS, tickColor=AXIS,
-            labelColor=MUTED, titleColor=INK_2, labelFontSize=12, titleFontSize=12, titleFontWeight="normal",
-        )
-        .configure_legend(labelColor=INK_2, titleColor=INK_2, orient="top", title=None, symbolStrokeWidth=2)
-    )
+st.markdown(CSS, unsafe_allow_html=True)
 
 
 def plain(text: str) -> str:
@@ -76,7 +61,7 @@ def describe(env: Envelope) -> str:
         case "ACCEPT":
             return f"Accepts offer from {b.offer.sender} ({money(b.offer.body.advance, 2)})"
         case "ASSIGNMENT_NOTICE":
-            return f"Claims the invoice: supplier's signed acceptance attached"
+            return "Claims the invoice: supplier's signed acceptance attached"
         case "ASSIGNMENT_ACK":
             return f"Will pay {b.new_payee_id} {money(b.amount, 2)} on {b.due_date}"
         case "ASSIGNMENT_REJECTED":
@@ -159,7 +144,10 @@ def new_walkthrough(dishonest: bool = False) -> dict:
     a = SupplierNode("supplier-a", net, SupplierProfile(factoring_apr=0.30))
     b = SupplierNode("supplier-b", net, SupplierProfile(factoring_apr=0.36, double_dip=True))
     buyer.equivocate = dishonest
-    return {"net": net, "buyer": buyer, "a": a, "b": b, "step": 0, "marks": [0], "dec_marks": [0], "dishonest": dishonest}
+    w = {"net": net, "buyer": buyer, "a": a, "b": b, "step": 0, "marks": [0], "dec_marks": [0], "log_marks": [0],
+         "dishonest": dishonest}
+    w["snaps"] = [snapshot(w)]
+    return w
 
 
 def advance(w: dict) -> None:
@@ -203,6 +191,105 @@ def advance(w: dict) -> None:
     w["step"] += 1
     w["marks"].append(len(net.log))
     w["dec_marks"].append(len(net.decisions))
+    w["log_marks"].append(len(net.ack_log.entries))
+    w["snaps"].append(snapshot(w))
+
+
+SHORT_STEPS = ["Invoices", "Early-pay requests", "Buyer's cash", "Accept & assign", "Tampering", "Maturity"]
+
+
+def snapshot(w: dict) -> dict:
+    """Participant balances after the current step, for the state cards."""
+    net, buyer = w["net"], w["buyer"]
+    paid = sum(v for d, v in buyer.paid_out.items() if d <= net.today)
+    snap = {"buyer_cash": buyer.policy.opening_cash - paid, "floor": buyer.policy.cash_floor}
+    for f in net.funders:
+        snap[f.id] = (f.exposure.get(buyer.id, 0), f.policy.limit, len(f.book), len(f.alarms))
+    for s in (w["a"], w["b"]):
+        snap[s.id] = (sum(r.received for r in s.receivables.values()),
+                      next((r.received_on for r in s.receivables.values() if r.received_on), None),
+                      sum(r.invoice.amount for r in s.receivables.values()))
+    return snap
+
+
+def stepper(step: int) -> None:
+    cells = []
+    for i, name in enumerate(SHORT_STEPS, start=1):
+        cls = "done" if i < step else "current" if i == step else ""
+        cells.append(f'<div class="of-step {cls}"><b>Step {i}</b>{name}</div>')
+    st.markdown(f'<div class="of-steps">{"".join(cells)}</div>', unsafe_allow_html=True)
+
+
+def card(role: str, name: str, value: str, sub: str, ratio: float | None = None, delta: str = "") -> str:
+    bar = f'<div class="of-bar"><span style="width:{max(0, min(ratio, 1)) * 100:.0f}%"></span></div>' if ratio is not None else ""
+    d = f'<div class="of-delta">{delta}</div>' if delta else ""
+    return (f'<div class="of-card"><div class="of-role">{role}</div><div class="of-name">{name}</div>'
+            f'<div class="of-val">{value}</div><div class="of-sub">{sub}</div>{bar}{d}</div>')
+
+
+def state_cards(w: dict) -> None:
+    now, before = w["snaps"][-1], w["snaps"][-2] if len(w["snaps"]) > 1 else w["snaps"][-1]
+    net = w["net"]
+    cols = st.columns(5)
+
+    def chg(a: int, b: int) -> str:
+        return "" if a == b else f"{'+' if a > b else '−'}{money(abs(a - b), 2)} this step"
+
+    cash = now["buyer_cash"]
+    cols[0].markdown(card("Buyer", w["buyer"].id, money(cash, 2), f"floor {money(now['floor'])}",
+                          cash / w["buyer"].policy.opening_cash, chg(cash, before["buyer_cash"])), unsafe_allow_html=True)
+    for col, f in zip(cols[1:3], net.funders):
+        exp, limit, n, alarms = now[f.id]
+        sub = f"{n} funded · limit {money(limit)}" + (" · ⚠ equivocation caught" if alarms else "")
+        col.markdown(card("Bank", f.id, money(exp, 2), sub, exp / limit if limit else 0,
+                          chg(exp, before[f.id][0]).replace("this step", "exposure")), unsafe_allow_html=True)
+    for col, s in zip(cols[3:5], (w["a"], w["b"])):
+        got, on, face = now[s.id]
+        sub = f"received on {on}" if on else "waiting for payment"
+        col.markdown(card("Supplier", s.id, money(got, 2), f"{sub} · invoiced {money(face)}",
+                          got / face if face else 0, chg(got, before[s.id][0])), unsafe_allow_html=True)
+
+
+def step_diagram(w: dict, entries) -> str:
+    """Graphviz DOT: participants, with this step's messages as edges (rejected ones in red)."""
+    net = w["net"]
+    edges: dict[tuple[str, str, str, bool], int] = {}
+    for e in entries:
+        bad = e.status != "delivered" or e.msg_type == "ASSIGNMENT_REJECTED"
+        for r in e.recipients:
+            if r in net.nodes:
+                key = (e.sender, r, e.msg_type.replace("_", " ").title(), bad)
+                edges[key] = edges.get(key, 0) + 1
+    log_new = w.get("log_marks", [0, 0])
+    published = net.ack_log.entries[log_new[-2]:log_new[-1]]
+    # buyer on top, so supplier-bank traffic runs underneath it rather than through it
+    pos = {"supplier-a": (0, 1.5), "supplier-b": (0, 0), "acme-buyer": (2.9, 2.75),
+           "bank-a": (5.8, 1.5), "bank-b": (5.8, 0), "ack-log": (5.8, 2.9)}
+    lines = [
+        "digraph G {",
+        'graph [layout=neato, splines=curved, overlap=true, bgcolor="transparent", pad=0.3];',
+        f'node [shape=box, style="rounded,filled", fillcolor="{SURFACE}", color="{AXIS}", fontname="Helvetica", '
+        f'fontsize=17, fontcolor="{INK}", margin="0.2,0.08", width=1.3];',
+        f'edge [fontname="Helvetica", fontsize=13, color="{BLUE}", fontcolor="{INK_2}", arrowsize=0.8, penwidth=1.6];',
+    ]
+    labels = {"acme-buyer": "acme-buyer\\nbuyer node", "supplier-a": "supplier-a", "supplier-b": "supplier-b",
+              "bank-a": "bank-a", "bank-b": "bank-b"}
+    for node, label in labels.items():
+        x, y = pos[node]
+        extra = f', penwidth=1.8, color="{INK_2}"' if node == "acme-buyer" else ""
+        lines.append(f'"{node}" [label="{label}", pos="{x},{y}!"{extra}];')
+    if net.ack_log.entries:
+        x, y = pos["ack-log"]
+        lines.append(f'"ack-log" [label="Acknowledgment log", shape=cylinder, pos="{x},{y}!", color="{MUTED}", '
+                     f'fontcolor="{INK_2}", fontsize=14];')
+    for (src, dst, label, bad), n in edges.items():
+        lab = label + (f" ×{n}" if n > 1 else "")
+        style = f'color="{CRITICAL}", fontcolor="{CRITICAL}", style=dashed, label="✕ {lab}"' if bad else f'label="{lab}"'
+        lines.append(f'"{src}" -> "{dst}" [{style}];')
+    for e in published:
+        lines.append(f'"{e.funder_id}" -> "ack-log" [color="{MUTED}", fontcolor="{INK_2}", label="publish #{e.seq}"];')
+    lines.append("}")
+    return "\n".join(lines)
 
 
 def walkthrough_tab() -> None:
@@ -231,7 +318,7 @@ def walkthrough_tab() -> None:
         st.session_state.walk = new_walkthrough(dishonest)
         st.rerun()
 
-    st.progress(w["step"] / len(STEPS), text=f"Step {w['step']} of {len(STEPS)}")
+    stepper(w["step"])
 
     if w["step"] == 0:
         st.info("Press **Next step** to start. " + STEPS[0][1].split(".")[0] + ".")
@@ -243,10 +330,16 @@ def walkthrough_tab() -> None:
         return
 
     title, text = STEPS[w["step"] - 1]
-    st.markdown(f"#### {w['step']}. {title}")
-    st.markdown(text)
-
     new = net.log[w["marks"][-2]:w["marks"][-1]]
+    left, right = st.columns([5, 7], gap="large")
+    with left:
+        st.markdown(f"#### {w['step']}. {title}")
+        st.markdown(text)
+        st.caption("Blue arrows: messages delivered and acted on. Red dashed: rejected.")
+    with right:
+        st.graphviz_chart(step_diagram(w, new), width="stretch")
+    state_cards(w)
+    st.markdown("")
     if w["step"] == 5:
         bad = [e for e in new if e.status.startswith("rejected")]
         if bad:
@@ -310,8 +403,9 @@ def walkthrough_tab() -> None:
 
 
 def sidebar_config() -> ScenarioConfig:
-    st.sidebar.header("Simulation settings")
-    st.sidebar.caption("Synthetic data. Ranges are anchored to the sources in docs/market-context.md.")
+    st.sidebar.markdown('<div class="of-side-title">Simulation settings</div><div class="of-side-sub">Drive the '
+                        "Network outcome, Buyer, Suppliers, Funders and Message log tabs. Synthetic data, anchored "
+                        "to the sources in docs/market-context.md.</div>", unsafe_allow_html=True)
     seed = st.sidebar.number_input("Random seed", 0, 10_000, 7)
     with st.sidebar.expander("Buyer", expanded=True):
         opening = st.slider("Opening cash (k)", 500, 5_000, 1_600, 100)
@@ -398,11 +492,11 @@ def overview_tab(sc, m) -> None:
     k[0].metric("Supplier financing cost", money(m.supplier_cost_openfloat), f"-{saving_pct:.0%} vs own factoring",
                 delta_color="inverse",
                 help=f"Cost of early payment via OpenFloat. The same invoices at each supplier's own factoring rate: {money(m.supplier_cost_factoring)}.")
-    k[1].metric("Early-payment requests financed", f"{m.financed} / {m.early_requests}",
+    k[1].metric("Requests financed", f"{m.financed} / {m.early_requests}",
                 help="Invoices paid to the supplier before the due date.")
     k[2].metric("Double financing blocked", f"{m.double_financing_blocked}",
                 help="Second claims on an already financed invoice, rejected by the buyer's node.")
-    k[3].metric("Days under floor from early pay", f"{m.floor_breaches_caused}",
+    k[3].metric("Days under cash floor", f"{m.floor_breaches_caused}",
                 help="Days the buyer's balance was under the floor and lower than if it had paid everything on the due date. "
                      "Payables forecast is " + ("on." if sc.config.use_forecast else "OFF."))
 
@@ -421,8 +515,20 @@ def overview_tab(sc, m) -> None:
         st.markdown("**Who funded early payments**")
         grid = st.columns(2)
         for i, (label, n, face) in enumerate(funding_sources(sc)):
-            grid[i % 2].metric(label, f"{n}", money(face) + " face value", delta_color="off", delta_arrow="off",
-                               help="Invoices funded early, and their total face value.")
+            short = "Buyer cash" if label == "Buyer's own cash" else label
+            grid[i % 2].metric(short, f"{n}", f"{face / 1e8:.2f}M face value", delta_color="off", delta_arrow="off",
+                               help=f"{label}: invoices funded early, and their total face value ({money(face)}).")
+
+    c3, c4 = st.columns(2)
+    with c3:
+        st.markdown("**Financing cost per invoice: OpenFloat vs the supplier's own factoring**")
+        st.altair_chart(cost_scatter(sc), width="stretch")
+        st.caption("Each dot is one financed invoice. Own factoring is priced off the supplier's credit, "
+                   "OpenFloat off the buyer's.")
+    with c4:
+        st.markdown("**Early payments funded per week, by source**")
+        st.altair_chart(weekly_sources(sc), width="stretch")
+        st.caption("The buyer funds from its own cash while its floor allows; banks take the rest.")
 
 
 def buyer_tab(sc) -> None:
@@ -474,6 +580,9 @@ def supplier_tab(sc) -> None:
 
 
 def funder_tab(sc) -> None:
+    st.markdown("**Exposure on the buyer over time, against each bank's limit**")
+    st.altair_chart(exposure_chart(sc), width="stretch")
+    st.caption("Firm offers reserve limit until they expire; exposure falls away as the buyer pays at maturity.")
     for f in sc.funders:
         price = f"{f.policy.apr:.2%} APR"
         funded = sum(o.advance for o, _ in f.book)
@@ -483,14 +592,8 @@ def funder_tab(sc) -> None:
         c[0].metric("Invoices funded", len(f.book))
         c[1].metric("Advanced", money(funded))
         c[2].metric("Income at maturity", money(face - funded))
-        peak = 0
-        exposure = 0
-        events = sorted([(o.pay_date, u.amount) for o, u in f.book] + [(u.due_date, -u.amount) for _, u in f.book])
-        for _, amt in events:
-            exposure += amt
-            peak = max(peak, exposure)
-        st.progress(min(peak / f.policy.limit, 1.0) if f.policy.limit else 0.0,
-                    text=f"Peak exposure on the buyer: {money(peak)} of {money(f.policy.limit)} limit")
+        if not f.book:
+            st.caption(f"{f.id} funded nothing: a cheaper bank had room for every request.")
         st.divider()
 
 
@@ -508,9 +611,13 @@ def log_tab(sc) -> None:
 
 # --- layout ----------------------------------------------------------------------
 
-st.title("OpenFloat")
-st.markdown("Open protocol for financing at the payment layer. A supplier with a buyer-approved invoice gets paid "
-            "early by the cheapest source of money, with **no central operator** and **no double financing**.")
+st.markdown(
+    '<div class="of-hero"><div><h1>OpenFloat</h1><div class="of-tag">Open protocol for financing at the payment '
+    "layer. A supplier with a buyer-approved invoice gets paid early by the cheapest source of money.</div></div>"
+    '<div class="of-pills"><span class="of-pill">No central operator</span><span class="of-pill">Signed messages</span>'
+    '<span class="of-pill">No double financing</span><span class="of-pill">Apache-2.0</span></div></div>',
+    unsafe_allow_html=True,
+)
 
 cfg = sidebar_config()
 tabs = st.tabs(["Walkthrough", "Network outcome", "Buyer", "Suppliers", "Funders", "Message log"])
