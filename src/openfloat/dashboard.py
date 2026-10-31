@@ -22,7 +22,7 @@ from openfloat.nodes import (
     SupplierNode,
     SupplierProfile,
 )
-from openfloat.sim import ScenarioConfig, _baseline_path, build, evaluate
+from openfloat.sim import PUBLIC_B2B_VIRTUAL_IC, ScenarioConfig, _baseline_path, build, evaluate
 
 # reference palette (light): categorical slots 1-2, ink and chrome
 BLUE, ORANGE = "#2a78d6", "#eb6834"
@@ -155,7 +155,7 @@ def new_walkthrough() -> dict:
     )
     FunderNode("bank-a", net, FunderPolicy(OfferKind.FUNDER, limit=500_000_00, apr=0.055))
     FunderNode("bank-b", net, FunderPolicy(OfferKind.FUNDER, limit=500_000_00, apr=0.062))
-    FunderNode("card-co", net, FunderPolicy(OfferKind.CARD, limit=500_000_00, card_fee=0.02))
+    FunderNode("card-co", net, FunderPolicy(OfferKind.CARD, limit=500_000_00, card_fee=PUBLIC_B2B_VIRTUAL_IC))
     a = SupplierNode("supplier-a", net, SupplierProfile(factoring_apr=0.30))
     b = SupplierNode("supplier-b", net, SupplierProfile(factoring_apr=0.36, double_dip=True))
     return {"net": net, "buyer": buyer, "a": a, "b": b, "step": 0, "marks": [0], "dec_marks": [0]}
@@ -299,7 +299,9 @@ def sidebar_config() -> ScenarioConfig:
         a_lim = st.slider("Bank A limit (k)", 0, 5_000, 1_500, 100)
         b_apr = st.slider("Bank B APR (%)", 2.0, 15.0, 6.2, 0.1) / 100
         b_lim = st.slider("Bank B limit (k)", 0, 5_000, 1_500, 100)
-        card_fee = st.slider("Card fee paid by supplier (%)", 0.0, 4.0, 2.0, 0.1) / 100
+        card_fee = st.slider("Card fee paid by supplier (%)", 0.0, 4.0, PUBLIC_B2B_VIRTUAL_IC * 100, 0.1,
+                             help="Default: Visa's published B2B virtual-card interchange (2.0%, Oct 2025 schedule). "
+                                  "Excludes the acquirer's markup, so the real supplier cost is a little higher.") / 100
         card_lim = st.slider("Card limit (k)", 0, 2_000, 500, 50)
     with st.sidebar.expander("Suppliers"):
         p_early = st.slider("Share wanting early payment (%)", 0, 100, 60, 5) / 100
@@ -399,7 +401,7 @@ def overview_tab(sc, m) -> None:
             grid[i % 2].metric(label, f"{n}", money(face) + " face value", delta_color="off", delta_arrow="off",
                                help="Invoices funded early, and their total face value.")
         if "CARD" not in m.by_route:
-            st.caption("Card never won here: at a flat fee, banks are cheaper unless their limits are used up.")
+            st.caption("Card never won here: at the public 2% B2B interchange, banks are cheaper unless their limits are used up.")
 
 
 def buyer_tab(sc) -> None:
@@ -453,7 +455,7 @@ def supplier_tab(sc) -> None:
 def funder_tab(sc) -> None:
     for f in sc.funders:
         kind = "Card issuer" if f.policy.kind == OfferKind.CARD else "Bank"
-        price = f"{f.policy.card_fee:.1%} flat fee" if f.policy.kind == OfferKind.CARD else f"{f.policy.apr:.2%} APR"
+        price = f"{f.policy.card_fee:.1%} fee (public B2B interchange)" if f.policy.kind == OfferKind.CARD else f"{f.policy.apr:.2%} APR"
         funded = sum(o.advance for o, _ in f.book)
         face = sum(u.amount for _, u in f.book)
         st.markdown(f"**{f.id}** · {kind} · {price} · limit {money(f.policy.limit)}")

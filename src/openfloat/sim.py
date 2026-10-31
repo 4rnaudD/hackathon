@@ -24,6 +24,12 @@ from .nodes import (
 )
 
 
+# Visa's published interchange for B2B virtual-card payments (October 2025 schedule), via Corpay;
+# see docs/market-context.md. Public interchange only: excludes the acquirer's markup, so the
+# supplier's real card cost is somewhat higher than this.
+PUBLIC_B2B_VIRTUAL_IC = 0.020
+
+
 @dataclass
 class ScenarioConfig:
     seed: int = 7
@@ -51,7 +57,7 @@ class ScenarioConfig:
         default_factory=lambda: [
             ("bank-a", OfferKind.FUNDER, 1_500_000_00, 0.055, 0.0),
             ("bank-b", OfferKind.FUNDER, 1_500_000_00, 0.062, 0.0),
-            ("card-co", OfferKind.CARD, 500_000_00, 0.0, 0.020),
+            ("card-co", OfferKind.CARD, 500_000_00, 0.0, PUBLIC_B2B_VIRTUAL_IC),
         ]
     )
 

@@ -143,7 +143,7 @@ uv run pytest                        # protocol and invariant tests
 ## Results on synthetic data
 
 Synthetic scenario: about 185 invoices over 30 days, 60% of suppliers wanting early payment, supplier
-factoring rates drawn from 20–45% APR, banks at 5.5% and 6.2%, card at a 2% flat fee, 5% of suppliers
+factoring rates drawn from 20–45% APR, banks at 5.5% and 6.2%, card at 2.0% (Visa's published B2B virtual-card interchange; excludes acquirer markup), 5% of suppliers
 attempting to double-finance. Three seeds.
 
 | Metric | Result |
@@ -156,7 +156,7 @@ attempting to double-finance. Three seeds.
 
 **Where it fails:** the buyer's payables forecast is a simple run-rate. When actual invoices exceed it,
 early payments can still push the balance under the floor for a few days. A better forecast, or a
-safety margin on the floor, would fix that. The card route never wins at a 2% flat fee, because banks
+safety margin on the floor, would fix that. The card route never wins at the public 2% interchange, because banks
 are cheaper for any tenor under about 130 days. It only wins once bank limits are used up.
 
 All figures come from synthetic data with the stated assumptions. They are not a claim about any real
