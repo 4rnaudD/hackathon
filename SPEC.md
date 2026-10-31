@@ -135,7 +135,38 @@ if the solver fails. This is node policy, not protocol: any buyer may use its ow
 | Tampering in transit | Signatures over canonical JSON, recursively over embedded proofs |
 | Invoice substitution | `invoice_hash` binds undertaking, offers and notices to one invoice |
 
-## 8. Out of scope for 0.1 / open questions
+## 8. Design rationale and open questions
+
+**Why no shared ledger?** For each component, ask: *is there a party everyone would trust to run this?*
+For approved payables the answer is yes, the obligor. Only the buyer can say who it will pay at maturity,
+so the buyer's node is the registry. A shared ledger earns its place only for assets with no natural
+authority, such as transferable documents where possession confers title. Those may be added later behind
+the same request layer.
+
+**Why the buyer's approval is enough evidence.** In open-account trade the buyer approves an invoice after
+receiving the goods. The undertaking *is* the attestation that the trade happened, so no external oracle
+is needed.
+
+**What if the buyer acknowledges two funders?** Funders cannot detect this without a shared view. The
+protection is legal, not technical: each `ASSIGNMENT_ACK` is a signed undertaking to pay that funder, so a
+buyer that acknowledges twice owes twice. The residual risk is buyer insolvency, which is the credit risk
+funders already price. Optional mitigation: funders publish hashes of acknowledgments they hold, so
+duplicates become detectable.
+
+**Open questions**
+
+1. **Governance.** Who owns the specification and the participant directory? Consortium-owned trade
+   networks failed when owners withdrew funding. The intended model is a neutral foundation (FINOS-style),
+   with change control and conformance testing, and no single commercial owner.
+2. **Identity.** The directory must bind node keys to verified legal entities. GLEIF vLEI (verifiable
+   Legal Entity Identifiers) is the leading candidate.
+3. **Incentives and sustainability.** Buyers adopt for discount income, supplier resilience and no platform
+   fee. Funders adopt for buyer-quality assets with built-in double-financing protection. Maintenance can be
+   funded by hosted nodes, compliance tooling and certification, without a fee on every transaction.
+4. **Dilution.** Credit notes and disputes can reduce the amount owed after approval. Funders need a defined
+   rule for how dilution affects assigned invoices.
+
+## 9. Out of scope for 0.1
 
 - Transport and discovery (reference implementation uses an in-process bus; HTTPS + directory lookup next).
 - Key rotation and revocation; directory governance.
