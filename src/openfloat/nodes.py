@@ -12,7 +12,7 @@ from datetime import date, timedelta
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from .crypto import Identity
+from .crypto import Identity, sha256_hex
 from .messages import (
     Accept,
     AssignmentAck,
@@ -25,6 +25,9 @@ from .messages import (
     InvoiceRejected,
     Offer,
     OfferKind,
+    PaymentOverdue,
+    PaymentReceived,
+    PaymentStatus,
     PaymentUndertaking,
     SettlementInstruction,
 )
@@ -32,6 +35,9 @@ from .optimiser import Candidate, choose_self_funded, date_range
 
 if TYPE_CHECKING:
     from .network import Network
+    from .rails import BankPayment
+
+OVERDUE_GRACE_DAYS = 1
 
 
 def discounted(amount: int, apr: float, days: int) -> int:
@@ -45,6 +51,20 @@ def apr_of(amount: int, advance: int, days: int) -> float:
     return (amount - advance) / advance * 365 / days
 
 
+@dataclass
+class Expectation:
+    """A payment this node is owed, tracked until its own bank reports the credit."""
+
+    invoice_id: str
+    payer: str
+    amount: int
+    due: date
+    kind: str  # "advance" or "maturity"
+    status: str = "EXPECTED"  # EXPECTED -> PAID, or EXPECTED -> OVERDUE -> PAID_LATE
+    received_on: date | None = None
+    days_late: int = 0
+
+
 class Node:
     role = "node"
 
@@ -52,12 +72,67 @@ class Node:
         self.id = node_id
         self.identity = Identity(node_id)
         self.net = net
+        self.expected: dict[str, Expectation] = {}
         net.join(self)
 
     def send(self, recipients: list[str], body) -> Envelope:
         env = Envelope.seal(self.identity, recipients, self.net.today, body)
         self.net.post(env)
+        if isinstance(body, SettlementInstruction):
+            self.net.rails.submit(env)  # hand the instruction to our own bank (pain.001 / bank API)
         return env
+
+    # --- money movement: expectations, bank reports, overdue ------------------
+
+    def expect(self, invoice_id: str, payer: str, amount: int, due: date, kind: str) -> None:
+        self.expected[invoice_id] = Expectation(invoice_id, payer, amount, due, kind)
+
+    def on_bank_debit(self, p: "BankPayment") -> None:
+        """Our bank executed a payment we instructed: tell the payee, citing the bank reference."""
+        b = p.instruction.body
+        self.send([b.payee_id], PaymentStatus(invoice_id=b.invoice_id, end_to_end_id=p.end_to_end_id, status="ACSC",
+                                              amount=b.amount, currency=b.currency, value_date=p.executed_on,
+                                              bank_reference=p.bank_reference))
+
+    def on_bank_credit(self, p: "BankPayment") -> None:
+        """Our bank credited us: match it to what we are owed, then confirm receipt to the payer."""
+        b = p.instruction.body
+        e = self.expected.get(b.invoice_id)
+        if e is None or e.status in ("PAID", "PAID_LATE"):
+            self.decide(b.invoice_id, f"unexpected credit of {b.amount/100:,.2f} from {b.payer_id}")
+        elif e.payer != b.payer_id or e.amount != b.amount:
+            self.decide(b.invoice_id, f"credit does not match expectation: got {b.amount/100:,.2f} from "
+                                      f"{b.payer_id}, expected {e.amount/100:,.2f} from {e.payer}")
+        else:
+            e.received_on = p.executed_on
+            if e.status == "OVERDUE":
+                e.status, e.days_late = "PAID_LATE", (p.executed_on - e.due).days
+                self.decide(b.invoice_id, f"received {b.amount/100:,.2f} from {b.payer_id}, {e.days_late} days late")
+            else:
+                e.status = "PAID"
+                self.decide(b.invoice_id, f"received {b.amount/100:,.2f} from {b.payer_id} (bank ref {p.bank_reference})")
+            self._credited(e)
+        self.send([b.payer_id], PaymentReceived(invoice_id=b.invoice_id, end_to_end_id=p.end_to_end_id,
+                                                amount=b.amount, currency=b.currency, value_date=p.executed_on,
+                                                bank_reference=p.bank_reference))
+
+    def _credited(self, e: Expectation) -> None:
+        """Hook for subclasses once an expected payment has arrived."""
+
+    def check_overdue(self) -> None:
+        today = self.net.today
+        for e in self.expected.values():
+            if e.status == "EXPECTED" and (today - e.due).days > OVERDUE_GRACE_DAYS:
+                e.status = "OVERDUE"
+                days = (today - e.due).days
+                self.decide(e.invoice_id, f"OVERDUE: {e.amount/100:,.2f} from {e.payer} was due {e.due} ({days} days)")
+                self.send([e.payer], PaymentOverdue(invoice_id=e.invoice_id, amount=e.amount, currency="SGD",
+                                                    due_date=e.due, days_overdue=days))
+
+    def on_payment_message(self, env: Envelope) -> None:
+        if isinstance(env.body, PaymentOverdue):
+            self.decide(env.body.invoice_id, f"overdue notice from {env.sender}: {env.body.amount/100:,.2f} "
+                                             f"due {env.body.due_date}")
 
     def decide(self, invoice_id: str, what: str) -> None:
         self.net.record_decision(self.id, invoice_id, what)
@@ -114,6 +189,8 @@ class BuyerNode(Node):
         self.paid_out: dict[date, int] = {}  # actual outflows by day
         self.discount_income = 0
         self.equivocate = False  # adversarial: acknowledge every assignment (for demos/tests)
+        self.late_share = 0.0  # share of maturities this buyer pays late (scenario setting)
+        self.late_days = 0
 
     # cash forecast --------------------------------------------------------
 
@@ -152,6 +229,8 @@ class BuyerNode(Node):
                 self._on_accept(env, acc)
             case AssignmentNotice() as note:
                 self._on_assignment(env, note)
+            case PaymentStatus() | PaymentReceived() | PaymentOverdue():
+                self.on_payment_message(env)
 
     def _on_invoice(self, env: Envelope, inv: Invoice) -> None:
         if env.sender != inv.supplier_id or inv.buyer_id != self.id:
@@ -287,9 +366,15 @@ class BuyerNode(Node):
             AssignmentAck(invoice_id=note.invoice_id, invoice_hash=p.invoice_hash, new_payee_id=note.new_payee_id, amount=p.invoice.amount, due_date=p.invoice.due_date),
         )
 
+    def pays_late(self, invoice_id: str) -> int:
+        """Days this buyer's payment run is late for an invoice (deterministic per invoice id)."""
+        bucket = int(sha256_hex(invoice_id)[:4], 16) % 100
+        return self.late_days if bucket < self.late_share * 100 else 0
+
     def settle_maturities(self) -> None:
         for p in self.payables.values():
-            if p.invoice.due_date == self.net.today and p.status in (InvStatus.APPROVED, InvStatus.ASSIGNED):
+            pay_day = p.invoice.due_date + timedelta(days=self.pays_late(p.invoice.invoice_id))
+            if pay_day == self.net.today and p.status in (InvStatus.APPROVED, InvStatus.ASSIGNED):
                 self.paid_out[self.net.today] = self.paid_out.get(self.net.today, 0) + p.invoice.amount
                 p.status = InvStatus.SETTLED
                 self.decide(p.invoice.invoice_id, f"maturity: paid {p.payee} {p.invoice.amount/100:,.2f}")
@@ -339,6 +424,8 @@ class FunderNode(Node):
                 self._on_rejected(env, rej)
             case SettlementInstruction():
                 pass
+            case PaymentStatus() | PaymentReceived() | PaymentOverdue():
+                self.on_payment_message(env)
 
     def _on_request(self, env: Envelope, req: EarlyPayRequest) -> None:
         u_env = req.undertaking
@@ -403,6 +490,7 @@ class FunderNode(Node):
                                              f"(log entry #{earlier[0].seq}); not funding")
         self.decide(o.invoice_id, f"published ack to log (entry #{entry.seq}); no earlier acknowledgment")
         self.book.append((o, u))
+        self.expect(o.invoice_id, u.buyer_id, u.amount, u.due_date, "maturity")
         self.decide(o.invoice_id, f"buyer acknowledged; funding {o.advance/100:,.2f}")
         self.send(
             [u.supplier_id],
@@ -465,6 +553,7 @@ class SupplierNode(Node):
                 if r and env.sender == r.invoice.buyer_id and u.invoice_hash == r.invoice.content_hash():
                     r.undertaking = env
                     r.outcome = "approved"
+                    self.expect(u.invoice_id, u.buyer_id, u.amount, u.due_date, "maturity")
             case InvoiceRejected() as rej:
                 if rej.invoice_id in self.receivables:
                     self.receivables[rej.invoice_id].outcome = f"rejected: {rej.reason}"
@@ -476,10 +565,24 @@ class SupplierNode(Node):
                 r = self.receivables.get(ack.invoice_id)
                 if r:
                     r.outcome = f"financed by {ack.new_payee_id}"
+                    e = self.expected.get(ack.invoice_id)
+                    if e and e.kind == "maturity" and e.status == "EXPECTED":
+                        del self.expected[ack.invoice_id]  # the funder, not we, is now owed at maturity
             case SettlementInstruction() as s:
                 r = self.receivables.get(s.invoice_id)
-                if r and s.payee_id == self.id and r.received == 0:
-                    r.received, r.received_on = s.amount, s.value_date
+                e = self.expected.get(s.invoice_id)
+                early = r is not None and s.value_date < r.invoice.due_date
+                if r and s.payee_id == self.id and r.received == 0 and early and not (e and e.kind == "advance"):
+                    # a payer committed to pay us early: expect that amount on that date instead.
+                    # A maturity payment never replaces the original expectation, so lateness is kept.
+                    self.expect(s.invoice_id, s.payer_id, s.amount, s.value_date, "advance")
+            case PaymentStatus() | PaymentReceived() | PaymentOverdue():
+                self.on_payment_message(env)
+
+    def _credited(self, e: Expectation) -> None:
+        r = self.receivables.get(e.invoice_id)
+        if r and r.received == 0:
+            r.received, r.received_on = e.amount, e.received_on
 
     def request_early_pay(self) -> None:
         funders = self.net.directory.nodes_with_role("funder")

@@ -136,6 +136,42 @@ class SettlementInstruction(BaseModel):
     reference: str
 
 
+class PaymentStatus(BaseModel):
+    """Payer -> payee once the payer's own bank reports execution (mirrors ISO 20022 pain.002)."""
+
+    type: Literal["PAYMENT_STATUS"] = "PAYMENT_STATUS"
+    invoice_id: str
+    end_to_end_id: str  # msg_id of the SETTLEMENT_INSTRUCTION this payment executes
+    status: Literal["ACSP", "ACSC", "RJCT"]  # accepted / settled / rejected
+    amount: int
+    currency: str
+    value_date: date
+    bank_reference: str
+
+
+class PaymentReceived(BaseModel):
+    """Payee -> payer once the payee's own bank reports the credit (mirrors ISO 20022 camt.054)."""
+
+    type: Literal["PAYMENT_RECEIVED"] = "PAYMENT_RECEIVED"
+    invoice_id: str
+    end_to_end_id: str
+    amount: int
+    currency: str
+    value_date: date
+    bank_reference: str
+
+
+class PaymentOverdue(BaseModel):
+    """Payee -> payer when an expected payment has not been credited by its due date plus grace."""
+
+    type: Literal["PAYMENT_OVERDUE"] = "PAYMENT_OVERDUE"
+    invoice_id: str
+    amount: int
+    currency: str
+    due_date: date
+    days_overdue: int
+
+
 Body = Annotated[
     Union[
         Invoice,
@@ -148,6 +184,9 @@ Body = Annotated[
         AssignmentAck,
         AssignmentRejected,
         SettlementInstruction,
+        PaymentStatus,
+        PaymentReceived,
+        PaymentOverdue,
     ],
     Field(discriminator="type"),
 ]

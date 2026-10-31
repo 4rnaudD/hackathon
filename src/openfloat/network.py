@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 
 from .acklog import AckLog
 from .crypto import Directory
+from .rails import MockRails
 from .messages import Accept, Envelope
 
 if TYPE_CHECKING:
@@ -56,6 +57,7 @@ class Network:
         self.log: list[LogEntry] = []
         self.decisions: list[DecisionEntry] = []
         self.ack_log = AckLog()  # in production: independent, mirrored transparency logs
+        self.rails = MockRails(self)  # stands in for each participant's own bank
 
     def join(self, node: "Node") -> None:
         self.nodes[node.id] = node
@@ -114,9 +116,18 @@ class Network:
         for b in self.buyers:
             b.settle_maturities()
         self.deliver()
+        self.end_of_day()
+        self.today += timedelta(days=1)
+
+    def end_of_day(self) -> None:
+        """Banks execute due payments and report them; payees flag anything overdue."""
+        self.rails.process(self.today)
+        self.deliver()  # PAYMENT_STATUS / PAYMENT_RECEIVED
+        for node in list(self.nodes.values()):
+            node.check_overdue()
+        self.deliver()  # PAYMENT_OVERDUE
         for f in self.funders:
             f.release_matured()
-        self.today += timedelta(days=1)
 
     def settlements(self) -> list[Envelope]:
         return [e.envelope for e in self.log if e.msg_type == "SETTLEMENT_INSTRUCTION" and e.status == "delivered"]

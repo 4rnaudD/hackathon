@@ -45,6 +45,8 @@ class ScenarioConfig:
     approval_limit: int = 150_000_00
     optimiser: str = "milp"
     use_forecast: bool = True  # buyer forecasts payables it hasn't received yet
+    late_share: float = 0.0  # share of maturities the buyer pays late
+    late_days: int = 0
     # funders: (id, limit, apr)
     funders: list[tuple[str, int, float]] = field(
         default_factory=lambda: [
@@ -66,7 +68,7 @@ class Scenario:
     def run(self, extra_days: int | None = None) -> None:
         """Issue invoices for `config.days`, then run until every invoice matures."""
         last_due = max((inv.due_date for day in self.schedule.values() for _, inv, _ in day), default=self.net.today)
-        end = last_due + timedelta(days=1) if extra_days is None else self.net.today + timedelta(days=self.config.days + extra_days)
+        end = last_due + timedelta(days=self.config.late_days + 3) if extra_days is None else self.net.today + timedelta(days=self.config.days + extra_days)
         while self.net.today <= end:
             todays = self.schedule.get(self.net.today, [])
             self.net.run_day(lambda n, todays=todays: [s.issue(inv, early) for s, inv, early in todays])
@@ -92,6 +94,7 @@ def build(cfg: ScenarioConfig) -> Scenario:
         ),
         set(sup_ids),
     )
+    buyer.late_share, buyer.late_days = cfg.late_share, cfg.late_days
     funders = [
         FunderNode(fid, net, FunderPolicy(limit=limit, apr=apr))
         for fid, limit, apr in cfg.funders
@@ -172,6 +175,11 @@ class Metrics:
     min_balance: int = 0
     floor: int = 0
     floor_breaches_caused: int = 0
+    payments_executed: int = 0  # bank payments executed on the mock rails
+    payments_confirmed: int = 0  # PAYMENT_RECEIVED messages from payees
+    overdue_notices: int = 0
+    paid_late: int = 0
+    unpaid_at_end: int = 0  # expectations still open when the run ends
 
     @property
     def supplier_saving(self) -> int:
@@ -208,6 +216,12 @@ def evaluate(sc: Scenario) -> Metrics:
             m.buyer_yield_forgone += p.early_advance * sc.config.cash_yield * days / 365
     m.double_financing_blocked = sum(1 for d in sc.net.decisions if "DOUBLE FINANCING" in d.decision and d.node == sc.buyer.id)
     m.bad_signatures = sum(1 for e in sc.net.log if e.status.startswith("rejected"))
+    m.payments_executed = sum(1 for p in sc.net.rails.payments if p.executed_on)
+    m.payments_confirmed = sum(1 for e in sc.net.log if e.msg_type == "PAYMENT_RECEIVED" and e.status == "delivered")
+    m.overdue_notices = sum(1 for e in sc.net.log if e.msg_type == "PAYMENT_OVERDUE" and e.status == "delivered")
+    expectations = [x for n in sc.net.nodes.values() for x in n.expected.values()]
+    m.paid_late = sum(1 for x in expectations if x.status == "PAID_LATE")
+    m.unpaid_at_end = sum(1 for x in expectations if x.status in ("EXPECTED", "OVERDUE"))
     # realised cash path vs floor
     start = sc.config.start
     path = sc.buyer.balance_path(start, sc.net.today - timedelta(days=1))

@@ -63,6 +63,9 @@ verify against the directory.
 | `ASSIGNMENT_ACK` | Buyer → Funder, Supplier | invoice_id, invoice_hash, new_payee_id, amount, due_date | — |
 | `ASSIGNMENT_REJECTED` | Buyer → Funder | invoice_id, new_payee_id, reason | — |
 | `SETTLEMENT_INSTRUCTION` | Payer → Payee | payer, payee, amount, value_date, rail, reference | — |
+| `PAYMENT_STATUS` | Payer → Payee | invoice_id, end_to_end_id, status (`ACSP`, `ACSC`, `RJCT`), amount, currency, value_date, bank_reference | — |
+| `PAYMENT_RECEIVED` | Payee → Payer | invoice_id, end_to_end_id, amount, currency, value_date, bank_reference | — |
+| `PAYMENT_OVERDUE` | Payee → Payer | invoice_id, amount, currency, due_date, days_overdue | — |
 
 `invoice_hash` is the SHA-256 of the canonical invoice body and binds every later message to one exact
 invoice.
@@ -138,6 +141,76 @@ stateDiagram-v2
 
 `PAID_EARLY` is closed: the supplier has already been paid, so nothing is due at maturity. In any state
 other than `APPROVED`, a further `ASSIGNMENT_NOTICE` is answered with `ASSIGNMENT_REJECTED`.
+
+### 5.6 Payment confirmation
+
+Nodes never move money (§1). A `SETTLEMENT_INSTRUCTION` is handed to the payer's own bank, and the
+protocol then records signed evidence of what the banks report. Each node reports only what its own bank
+has told it.
+
+1. **Instruction.** The payer's node emits a `SETTLEMENT_INSTRUCTION` and passes it to its bank as a
+   payment file (§5.8).
+2. **Execution.** When the payer's bank reports on the payment (an ISO 20022 pain.002 status report), the
+   payer's node sends `PAYMENT_STATUS` to the payee. `status` uses the pain.002 codes: `ACSP` (accepted,
+   in process), `ACSC` (settled) or `RJCT` (rejected). A `PAYMENT_STATUS` is the payer's signed statement
+   about its own bank's report; it is not proof that the payee has been credited.
+3. **Credit.** When the payee's bank reports the incoming credit (an ISO 20022 camt.054 credit
+   notification), the payee's node sends `PAYMENT_RECEIVED` to the payer. This is the payee's signed
+   acknowledgment that it has been paid.
+4. **Overdue.** If an expected payment (§5.7) has not been credited by its due date plus a grace period
+   (one day in the reference implementation), the payee's node sends `PAYMENT_OVERDUE` to the payer, with
+   the number of days overdue. When the credit later arrives, the payee sends `PAYMENT_RECEIVED` as usual
+   and records the payment as late.
+
+**End-to-end identification.** `end_to_end_id` is the `msg_id` of the `SETTLEMENT_INSTRUCTION` envelope
+the payment executes. The payer's node puts it in the pain.001 `EndToEndId`, and banks carry it through
+to the status report and the credit notification, so every bank movement maps to exactly one protocol
+instruction.
+
+**Amount mismatch.** If the credited amount differs from the expected amount, the payee's node records
+the mismatch and does not treat the credit as payment of the expectation. The expectation stays open
+(and can become overdue) until it is resolved between the parties.
+
+The protocol cannot make a payer pay. A `PAYMENT_OVERDUE` is signed evidence of non-payment, which
+together with the buyer's `PAYMENT_UNDERTAKING` or `ASSIGNMENT_ACK` supports enforcement under the
+applicable law (§10).
+
+### 5.7 Expected payments
+
+Each payee node tracks the payments it expects ("expectations"):
+
+- A **funder**, once it funds, expects the face value from the buyer on the due date.
+- A **supplier**, once its invoice is approved, expects the face value from the buyer on the due date.
+  When the invoice is paid early from buyer cash, or assigned to a funder, that expectation is replaced
+  by an expectation of the advance from the payer on the pay date. For an assigned invoice, the original
+  expectation is cancelled once the advance is received.
+
+```mermaid
+stateDiagram-v2
+    [*] --> EXPECTED
+    EXPECTED --> PAID: credited by due date plus grace
+    EXPECTED --> OVERDUE: not credited by due date plus grace, PAYMENT_OVERDUE sent
+    OVERDUE --> PAID_LATE: credited, days late recorded
+    PAID --> [*]
+    PAID_LATE --> [*]
+```
+
+A credit counts only if it matches the expected amount; a mismatched credit is recorded and leaves the
+expectation unchanged.
+
+### 5.8 Payment files
+
+The reference implementation renders each node's `SETTLEMENT_INSTRUCTION`s as an ISO 20022
+`pain.001.001.09` customer credit transfer initiation file: a group header, one payment-information
+block per execution date, and one transaction per instruction, with `EndToEndId` set to the
+instruction's `msg_id` and remittance information `OpenFloat <invoice_id>`. The files are well-formed
+XML following the pain.001.001.09 structure; they are not validated against the official XSD in this
+repository. Account and BIC data in the reference implementation are synthetic placeholders; a real
+deployment takes them from the participant's own banking setup.
+
+The reference implementation also includes mock bank rails standing in for the participants' banks. They
+execute each instruction on its value date and report the debit to the payer and the credit to the
+payee. A scenario setting makes the buyer pay some maturities late, to exercise the overdue path.
 
 ## 6. Buyer liquidity decision (reference behaviour)
 
@@ -224,6 +297,7 @@ runs a single in-process log.
 | Supplier finances the invoice outside the protocol | Signed representation in `ACCEPT` (§4.1) gives recourse; funders can also check public charge registers |
 | Buyer acknowledges two funders | Acknowledgment transparency log (§7): the later funder sees the earlier entry and does not fund |
 | Log tampering or reordering | Hash chain and funder signatures; mirrors and signed tree heads against withholding |
+| Payment claimed but not made | Payee confirms only on its own bank's credit notification; missing credit triggers `PAYMENT_OVERDUE` (§5.6) |
 
 ## 9. Design rationale and open questions
 

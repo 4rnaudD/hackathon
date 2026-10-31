@@ -24,6 +24,7 @@ from openfloat.nodes import (
 )
 from openfloat.sim import ScenarioConfig, _baseline_path, build, evaluate
 
+from openfloat.iso20022 import pain001
 from openfloat.dashboard_charts import cost_scatter, exposure_chart, weekly_sources
 from openfloat.dashboard_style import (
     AXIS, BLUE, CRITICAL, CSS, INK, INK_2, MUTED, ORANGE, SURFACE, chart_theme, money,
@@ -66,6 +67,12 @@ def describe(env: Envelope) -> str:
             return f"Will pay {b.new_payee_id} {money(b.amount, 2)} on {b.due_date}"
         case "ASSIGNMENT_REJECTED":
             return f"Claim rejected: {b.reason}"
+        case "PAYMENT_STATUS":
+            return f"My bank executed {money(b.amount, 2)} on {b.value_date} (status {b.status}, ref {b.bank_reference})"
+        case "PAYMENT_RECEIVED":
+            return f"My bank credited {money(b.amount, 2)} on {b.value_date} (ref {b.bank_reference})"
+        case "PAYMENT_OVERDUE":
+            return f"Overdue: {money(b.amount, 2)} was due {b.due_date} ({b.days_overdue} days)"
         case "SETTLEMENT_INSTRUCTION":
             return f"Pay {money(b.amount, 2)} to {b.payee_id} on {b.value_date} via {b.rail.replace('_', ' ').lower()}"
     return b.type
@@ -123,15 +130,21 @@ STEPS = [
      "The buyer's optimiser offers early payment from its own cash only where the discount beats its cash yield **and** its cash stays above the floor on every future day."),
     ("Suppliers accept, and one tries to double-finance",
      "Each supplier takes the best offer. Supplier B also accepts Bank B's offer, trying to finance the same invoice twice, "
-     "and signs a statement that the invoice is not assigned or pledged elsewhere each time. Watch how the second claim is stopped."),
+     "and signs a statement that the invoice is not assigned or pledged elsewhere each time. Watch how the second claim is stopped. "
+     "At the end of the day the banks execute the advances, and each payer and payee confirms the payment from its own bank's report."),
     ("Someone tampers with a message",
      "An attacker changes the amount on a payment instruction in transit. Every node verifies signatures, so the message is rejected before anyone acts on it."),
     ("Maturity",
-     "On each due date the buyer pays whoever it acknowledged: the bank for Supplier B's invoice. The supplier was paid weeks earlier."),
+     "On each due date the buyer pays whoever it acknowledged: the bank for Supplier B's invoice, Supplier A itself was paid early. "
+     "The buyer's bank executes the payment; the payee confirms it only once its own bank reports the credit. "
+     "If nothing arrives within a day of the due date, the payee sends a signed overdue notice."),
 ]
 
 
-def new_walkthrough(dishonest: bool = False) -> dict:
+WALK_LATE_DAYS = 5
+
+
+def new_walkthrough(dishonest: bool = False, late: bool = False) -> dict:
     net = Network(WALK_START)
     buyer = BuyerNode(
         "acme-buyer", net,
@@ -144,8 +157,9 @@ def new_walkthrough(dishonest: bool = False) -> dict:
     a = SupplierNode("supplier-a", net, SupplierProfile(factoring_apr=0.30))
     b = SupplierNode("supplier-b", net, SupplierProfile(factoring_apr=0.36, double_dip=True))
     buyer.equivocate = dishonest
+    buyer.late_share, buyer.late_days = (1.0, WALK_LATE_DAYS) if late else (0.0, 0)
     w = {"net": net, "buyer": buyer, "a": a, "b": b, "step": 0, "marks": [0], "dec_marks": [0], "log_marks": [0],
-         "dishonest": dishonest}
+         "dishonest": dishonest, "late": late}
     w["snaps"] = [snapshot(w)]
     return w
 
@@ -172,6 +186,7 @@ def advance(w: dict) -> None:
         a.choose_offers()
         b.choose_offers()
         net.deliver()
+        net.end_of_day()  # banks execute the advances; both sides confirm
     elif s == 4:
         legit = next(e.envelope for e in reversed(net.log) if e.msg_type == "SETTLEMENT_INSTRUCTION")
         forged = legit.model_copy(deep=True)
@@ -182,11 +197,10 @@ def advance(w: dict) -> None:
         net.deliver()
     elif s == 5:
         last_due = max(p.invoice.due_date for p in buyer.payables.values())
-        while net.today <= last_due:
+        while net.today <= last_due + timedelta(days=buyer.late_days + 2):
             buyer.settle_maturities()
             net.deliver()
-            for f in net.funders:
-                f.release_matured()
+            net.end_of_day()
             net.today += timedelta(days=1)
     w["step"] += 1
     w["marks"].append(len(net.log))
@@ -255,7 +269,7 @@ def step_diagram(w: dict, entries) -> str:
     net = w["net"]
     edges: dict[tuple[str, str, str, bool], int] = {}
     for e in entries:
-        bad = e.status != "delivered" or e.msg_type == "ASSIGNMENT_REJECTED"
+        bad = e.status != "delivered" or e.msg_type in ("ASSIGNMENT_REJECTED", "PAYMENT_OVERDUE")
         for r in e.recipients:
             if r in net.nodes:
                 key = (e.sender, r, e.msg_type.replace("_", " ").title(), bad)
@@ -309,13 +323,16 @@ def walkthrough_tab() -> None:
             advance(w)
             st.rerun()
         if c2.button("Restart", width="stretch"):
-            st.session_state.walk = new_walkthrough(w["dishonest"])
+            st.session_state.walk = new_walkthrough(w["dishonest"], w["late"])
             st.rerun()
-    dishonest = st.toggle("Dishonest buyer: acknowledges every claim, even on an invoice it already assigned",
-                          value=w["dishonest"], disabled=w["step"] > 0,
-                          help="Shows the acknowledgment log catching a buyer that equivocates. Set before starting.")
-    if dishonest != w["dishonest"]:
-        st.session_state.walk = new_walkthrough(dishonest)
+    t1, t2 = st.columns(2)
+    dishonest = t1.toggle("Dishonest buyer: acknowledges every claim", value=w["dishonest"], disabled=w["step"] > 0,
+                          help="Shows the acknowledgment log catching a buyer that acknowledges an invoice twice. "
+                               "Set before starting.")
+    late = t2.toggle(f"Buyer pays its maturities {WALK_LATE_DAYS} days late", value=w["late"], disabled=w["step"] > 0,
+                     help="Shows the overdue path: the payee flags the missing payment, then records it as paid late.")
+    if (dishonest, late) != (w["dishonest"], w["late"]):
+        st.session_state.walk = new_walkthrough(dishonest, late)
         st.rerun()
 
     stepper(w["step"])
@@ -335,7 +352,7 @@ def walkthrough_tab() -> None:
     with left:
         st.markdown(f"#### {w['step']}. {title}")
         st.markdown(text)
-        st.caption("Blue arrows: messages delivered and acted on. Red dashed: rejected.")
+        st.caption("Blue arrows: messages delivered and acted on. Red dashed: rejected or overdue.")
     with right:
         st.graphviz_chart(step_diagram(w, new), width="stretch")
     state_cards(w)
@@ -383,6 +400,18 @@ def walkthrough_tab() -> None:
                 "Entry hash": e.entry_hash[:12] + "…",
             } for e in log.entries]), hide_index=True, width="stretch")
 
+    if w["step"] == 6:
+        overdue = [e.envelope for e in new if e.msg_type == "PAYMENT_OVERDUE"]
+        for env in overdue:
+            st.warning(f"⏰ **{env.sender}** sent a signed overdue notice to {env.recipients[0]}: "
+                       f"{describe(env)}. The protocol cannot force payment; this notice is the evidence for "
+                       "enforcement under the buyer's signed undertaking.")
+        late = [x for n in net.nodes.values() for x in n.expected.values() if x.status == "PAID_LATE"]
+        for x in late:
+            st.info(f"{x.invoice_id}: paid {x.days_late} days late and confirmed by the payee once its bank credited it.")
+        with st.expander("Payment files (ISO 20022 pain.001) each node would send to its bank"):
+            payment_files(net, key="walk")
+
     if w["step"] >= len(STEPS):
         st.success("Done. Each supplier was paid early, each invoice was financed exactly once, "
                    "and the buyer paid exactly once at maturity.")
@@ -402,6 +431,23 @@ def walkthrough_tab() -> None:
 # --- simulation ------------------------------------------------------------------
 
 
+def payment_files(net, key: str) -> None:
+    sent = [e.envelope for e in net.log if e.msg_type == "SETTLEMENT_INSTRUCTION" and e.status == "delivered"]
+    payers = sorted({e.body.payer_id for e in sent})
+    if not payers:
+        st.caption("No payment instructions yet.")
+        return
+    who = st.selectbox("Payer", payers, key=f"pain-{key}")
+    mine = [e for e in sent if e.body.payer_id == who]
+    xml = pain001(who, mine)
+    st.caption(f"{len(mine)} credit transfers. EndToEndId = the instruction's message id, so the bank's status "
+               "and credit reports map back to the protocol. Account numbers and BICs are synthetic placeholders.")
+    st.download_button("Download pain.001", xml, file_name=f"{who}-pain.001.xml", mime="application/xml",
+                       key=f"dl-{key}")
+    st.code(xml if len(xml) < 12_000 else xml[:12_000] + "\n<!-- truncated in the preview; download for the full file -->",
+            language="xml")
+
+
 def sidebar_config() -> ScenarioConfig:
     st.sidebar.markdown('<div class="of-side-title">Simulation settings</div><div class="of-side-sub">Drive the '
                         "Network outcome, Buyer, Suppliers, Funders and Message log tabs. Synthetic data, anchored "
@@ -416,6 +462,8 @@ def sidebar_config() -> ScenarioConfig:
         forecast = st.toggle("Use payables forecast", True,
                              help="Without it, the buyer only sees invoices it has already received.")
         greedy = st.toggle("Greedy allocator instead of MILP", False)
+        late_share = st.slider("Maturities paid late (%)", 0, 100, 0, 5) / 100
+        late_days = st.slider("Days late", 0, 30, 5, 1)
     with st.sidebar.expander("Funders"):
         a_apr = st.slider("Bank A APR (%)", 2.0, 15.0, 5.5, 0.1) / 100
         a_lim = st.slider("Bank A limit (k)", 0, 5_000, 1_500, 100)
@@ -428,7 +476,7 @@ def sidebar_config() -> ScenarioConfig:
     return ScenarioConfig(
         seed=int(seed), opening_cash=opening * 1000_00, cash_floor=floor * 1000_00, daily_inflow=inflow * 1000_00,
         cash_yield=cash_yield, discount_apr=disc, use_forecast=forecast, optimiser="greedy" if greedy else "milp",
-        p_want_early=p_early, factoring_apr=(f_lo / 100, f_hi / 100), p_double_dip=dip,
+        p_want_early=p_early, late_share=late_share, late_days=late_days if late_share else 0, factoring_apr=(f_lo / 100, f_hi / 100), p_double_dip=dip,
         funders=[
             ("bank-a", a_lim * 1000_00, a_apr),
             ("bank-b", b_lim * 1000_00, b_apr),
@@ -505,7 +553,11 @@ def overview_tab(sc, m) -> None:
     k2[1].metric("Supplier saving", money(m.supplier_saving))
     k2[2].metric("Buyer net discount income", money(m.buyer_net_gain),
                  help="Discounts earned on early payments, minus the yield the cash would have earned.")
-    k2[3].metric("Messages signed and verified", f"{len(sc.net.log) - m.bad_signatures:,}")
+    k2[3].metric("Bank payments confirmed", f"{m.payments_confirmed} / {m.payments_executed}",
+                 help="Payments the mock banks executed, and how many the payee confirmed from its own bank's credit report.")
+    if m.overdue_notices:
+        st.caption(f"⏰ {m.overdue_notices} overdue notices sent; {m.paid_late} payments arrived late; "
+                   f"{m.unpaid_at_end} still unpaid when the run ended.")
 
     c1, c2 = st.columns([2, 1])
     with c1:
@@ -607,6 +659,8 @@ def log_tab(sc) -> None:
                and (not only_bad or e.status != "delivered")]
     st.caption(f"{len(entries):,} of {len(sc.net.log):,} messages")
     show_messages(entries[:2000], key="log")
+    with st.expander("Payment files (ISO 20022 pain.001)"):
+        payment_files(sc.net, key="log")
 
 
 # --- layout ----------------------------------------------------------------------

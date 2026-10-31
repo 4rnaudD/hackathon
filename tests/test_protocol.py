@@ -7,6 +7,7 @@ from hypothesis import strategies as st
 
 from openfloat.crypto import Identity
 from openfloat.messages import (
+    SettlementInstruction,
     Accept,
     AssignmentNotice,
     EarlyPayRequest,
@@ -183,6 +184,84 @@ def test_funder_declines_invoice_already_in_log():
     assert any(d.node == "bank-b" and "already in the acknowledgment log" in d.decision for d in net.decisions)
 
 
+# --- money movement: confirmations, overdue, payment files ---------------------
+
+
+def test_every_bank_payment_is_confirmed_by_both_sides():
+    net, buyer, fa, fb, sup = small_net(cash=0)
+    net.run_day(lambda n: sup.issue(invoice(), True))
+    executed = [p for p in net.rails.payments if p.executed_on]
+    assert len(executed) == 1  # bank-a's advance to the supplier
+    e2e = executed[0].end_to_end_id
+    status = [e.envelope.body for e in net.log if e.msg_type == "PAYMENT_STATUS"]
+    received = [e.envelope.body for e in net.log if e.msg_type == "PAYMENT_RECEIVED"]
+    assert [s.end_to_end_id for s in status] == [e2e] and status[0].status == "ACSC"
+    assert [r.end_to_end_id for r in received] == [e2e]
+    assert sup.receivables["INV-1"].received == executed[0].instruction.body.amount
+    assert sup.expected["INV-1"].status == "PAID"
+
+
+def test_late_buyer_gets_overdue_notice_then_paid_late():
+    net, buyer, fa, fb, sup = small_net(cash=0)
+    buyer.late_share, buyer.late_days = 1.0, 5
+    net.run_day(lambda n: sup.issue(invoice(days=20), True))
+    for _ in range(30):
+        net.run_day()
+    e = fa.expected["INV-1"]
+    assert e.status == "PAID_LATE" and e.days_late == 5
+    notices = [x.envelope for x in net.log if x.msg_type == "PAYMENT_OVERDUE"]
+    assert len(notices) == 1 and notices[0].sender == "bank-a" and notices[0].recipients == ["buyer"]
+
+
+def test_payment_claimed_but_never_made_goes_overdue():
+    net, buyer, fa, fb, sup = small_net(cash=0)
+    sup.issue(invoice(), True)
+    net.deliver()
+    sup.request_early_pay()
+    net.deliver()
+    buyer.run_batch()
+    net.deliver()
+    sup.choose_offers()
+    net.deliver()  # bank-a sends its SETTLEMENT_INSTRUCTION...
+    net.rails.payments.clear()  # ...but the money never leaves its bank
+    for _ in range(3):
+        net.end_of_day()
+        net.today += timedelta(days=1)
+    assert sup.receivables["INV-1"].received == 0
+    assert sup.expected["INV-1"].status == "OVERDUE"
+    assert any(x.msg_type == "PAYMENT_OVERDUE" and x.sender == "sup" for x in net.log)
+
+
+def test_credit_with_wrong_amount_is_not_treated_as_payment():
+    from openfloat.rails import BankPayment
+
+    net, buyer, fa, fb, sup = small_net(cash=0)
+    sup.issue(invoice(), True)
+    net.deliver()  # supplier now expects face value from the buyer at maturity
+    wrong = Envelope.seal(buyer.identity, ["sup"], D, SettlementInstruction(
+        invoice_id="INV-1", payer_id="buyer", payee_id="sup", amount=1_00, currency="SGD", value_date=D,
+        rail="BANK_TRANSFER", reference="x"))
+    sup.on_bank_credit(BankPayment(wrong, D, executed_on=D, bank_reference="BKTEST"))
+    assert sup.expected["INV-1"].status == "EXPECTED" and sup.receivables["INV-1"].received == 0
+    assert any("does not match expectation" in d.decision for d in net.decisions)
+
+
+def test_pain001_file_matches_instructions():
+    import xml.etree.ElementTree as ET
+
+    from openfloat.iso20022 import NS, pain001
+
+    sc = build(ScenarioConfig(seed=3, days=5, n_suppliers=6))
+    sc.run()
+    sent = [e.envelope for e in sc.net.log if e.msg_type == "SETTLEMENT_INSTRUCTION" and e.sender == "bank-a"]
+    root = ET.fromstring(pain001("bank-a", sent))
+    ns = {"p": NS}
+    assert int(root.find("p:CstmrCdtTrfInitn/p:GrpHdr/p:NbOfTxs", ns).text) == len(sent)
+    assert root.find("p:CstmrCdtTrfInitn/p:GrpHdr/p:CtrlSum", ns).text == f"{sum(e.body.amount for e in sent) / 100:.2f}"
+    e2e = {el.text for el in root.iterfind(".//p:EndToEndId", ns)}
+    assert e2e == {e.msg_id for e in sent}
+
+
 # --- policy -------------------------------------------------------------------
 
 
@@ -229,6 +308,7 @@ def test_invariants_random_scenarios(seed, dip):
         assert all(v == 0 for v in f.exposure.values())  # everything matured and released
     m = evaluate(sc)
     assert m.supplier_cost_openfloat <= m.supplier_cost_factoring
+    assert m.payments_executed == m.payments_confirmed and m.unpaid_at_end == 0
 
 
 # --- optimiser ----------------------------------------------------------------

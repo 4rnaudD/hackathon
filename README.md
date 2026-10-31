@@ -71,6 +71,8 @@ sequenceDiagram
     A->>L: check for an earlier ack to another bank
     L-->>A: none found
     A->>S: SETTLEMENT_INSTRUCTION advance, only after ack and log check
+    A->>S: PAYMENT_STATUS settled
+    S->>A: PAYMENT_RECEIVED
 
     rect rgba(220, 50, 50, 0.12)
     Note over S,X: Double-financing attempt
@@ -83,6 +85,8 @@ sequenceDiagram
 
     Note over S,X: Day 60, maturity
     B->>A: SETTLEMENT_INSTRUCTION full face value
+    B->>A: PAYMENT_STATUS settled
+    A->>B: PAYMENT_RECEIVED
 ```
 
 **The network.** Every participant runs its own node. Nodes exchange signed messages directly, resolve
@@ -126,6 +130,10 @@ flowchart TB
 - **Deterministic decisions.** Pricing, limits and the buyer's cash allocation are deterministic. The
   buyer decides which early payments to fund itself with a MILP that respects a daily cash floor and a
   payables forecast.
+- **Payments are evidenced, not moved.** Banks move the money. Each settlement instruction is rendered
+  as an ISO 20022 pain.001 payment file, and nodes exchange signed confirmations of what their own banks
+  report: `PAYMENT_STATUS` from the payer, `PAYMENT_RECEIVED` from the payee once credited, and
+  `PAYMENT_OVERDUE` when an expected payment has not arrived by its due date.
 
 Full protocol: **[SPEC.md](SPEC.md)**.
 
@@ -171,11 +179,14 @@ programme.
   by step. One supplier tries to finance the same invoice twice, and a message is tampered with in
   transit. Both are rejected. It can also be run with a dishonest buyer that acknowledges the same
   invoice to both banks: the second bank finds the earlier entry in the acknowledgment log and does not
-  fund.
+  fund. Mock banks execute each settlement instruction and the nodes exchange the resulting payment
+  confirmations. A "buyer pays late" option delays the maturity payment so the payee sends an overdue
+  notice.
 - **Network outcome:** the synthetic network's results, the buyer's cash balance against its floor, and
   who funded early payments. Every parameter can be changed from the sidebar.
 - **Buyer, supplier and funder views**, plus a filterable log where any message can be opened as its
-  signed JSON envelope.
+  signed JSON envelope. The Message log tab also shows each node's pain.001 payment file, which can be
+  viewed and downloaded.
 
 ## Repository layout
 
@@ -186,8 +197,11 @@ src/openfloat/messages.py  message schemas and signed envelopes
 src/openfloat/nodes.py     buyer, supplier and funder reference nodes
 src/openfloat/optimiser.py buyer liquidity MILP + greedy fallback
 src/openfloat/network.py   in-process transport and audit log
+src/openfloat/acklog.py    acknowledgment transparency log
+src/openfloat/rails.py     mock bank rails (stand-in for each participant's bank)
+src/openfloat/iso20022.py  pain.001 payment files from settlement instructions
 src/openfloat/sim.py       synthetic scenarios and evaluation
-src/openfloat/dashboard.py Streamlit dashboard
+src/openfloat/dashboard*.py Streamlit dashboard, charts and styling
 tests/                     protocol, security and invariant tests
 docs/market-context.md     sourced market figures
 ```
