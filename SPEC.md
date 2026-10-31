@@ -2,7 +2,7 @@
 
 OpenFloat lets a supplier holding a **buyer-approved invoice** get paid early, with the gap between the
 supplier's preferred pay date and the buyer's due date filled by the cheapest available liquidity source:
-the buyer's own cash, a funder, or a card issuer. It is a protocol, not a platform: there is no central
+the buyer's own cash or a funder. It is a protocol, not a platform: there is no central
 operator, and every participant runs (or delegates) its own node.
 
 This document is licensed CC BY 4.0. The reference implementation is Apache-2.0.
@@ -15,8 +15,7 @@ This document is licensed CC BY 4.0. The reference implementation is Apache-2.0.
 2. **Everything is signed.** Every message is an Ed25519-signed envelope. Claims that depend on another
    party's word carry that party's signed message as an embedded proof.
 3. **Nodes never move money.** A node emits *settlement instructions* to rails the participant already
-   uses (bank payment files/APIs, card issuing APIs). Regulated activity stays with banks, funders and
-   card issuers.
+   uses (bank payment files and APIs). Regulated activity stays with banks and funders.
 4. **Deterministic core, optional intelligence.** Validation, pricing, limits and allocation are
    deterministic. Language models may help read documents and explain outcomes; they never sign,
    validate or decide.
@@ -28,7 +27,6 @@ This document is licensed CC BY 4.0. The reference implementation is Apache-2.0.
 | **Buyer** (obligor) | Payables ledger, cash forecast | Approves invoices, signs payment undertakings, optionally pays early from own cash, acknowledges **at most one** assignment per invoice, pays the current payee at maturity |
 | **Supplier** (creditor) | Receivables | Issues invoices, requests early payment, accepts at most one offer (honest behaviour) |
 | **Funder** | Credit limits per buyer | Prices firm offers off the buyer's undertaking, funds only after the buyer's acknowledgement |
-| **Card issuer** | Card programme limits | A funder whose offer settles over card rails (T+1, flat fee) |
 
 ## 3. Identity and envelopes
 
@@ -58,8 +56,8 @@ verify against the directory.
 | `INVOICE` | Supplier → Buyer | invoice_id, supplier_id, buyer_id, amount, currency, issue_date, due_date, po_number | — |
 | `PAYMENT_UNDERTAKING` | Buyer → Supplier | invoice_id, **invoice_hash**, amount, currency, due_date | — |
 | `INVOICE_REJECTED` | Buyer → Supplier | invoice_id, reason | — |
-| `EARLY_PAY_REQUEST` | Supplier → Buyer + Funders | invoice_id, requested_date, accepts_card | buyer's `PAYMENT_UNDERTAKING` |
-| `OFFER` | Buyer / Funder → Supplier | offer_id, kind (`BUYER_DISCOUNT`, `FUNDER`, `CARD`), advance, pay_date, expires, annualised_rate | — |
+| `EARLY_PAY_REQUEST` | Supplier → Buyer + Funders | invoice_id, requested_date | buyer's `PAYMENT_UNDERTAKING` |
+| `OFFER` | Buyer / Funder → Supplier | offer_id, kind (`BUYER_DISCOUNT`, `FUNDER`), advance, pay_date, expires, annualised_rate | — |
 | `ACCEPT` | Supplier → Offeror | supplier_id | the signed `OFFER` |
 | `ASSIGNMENT_NOTICE` | Funder → Buyer | invoice_id, invoice_hash, new_payee_id | supplier's signed `ACCEPT` |
 | `ASSIGNMENT_ACK` | Buyer → Funder, Supplier | invoice_id, invoice_hash, new_payee_id, amount, due_date | — |
@@ -181,5 +179,7 @@ duplicates become detectable.
 - Key rotation and revocation; directory governance.
 - Dilution: credit notes and disputes after approval.
 - Partial financing and term extension (with accounting guardrails under ASU 2022-04 / IAS 7 disclosures).
-- Card flows modelled as assignment for simplicity; real card settlement extinguishes the invoice differently.
+- Card payments are deliberately not a funder route: a card issuer lends to the buyer, and a card payment
+  extinguishes the invoice rather than assigning it. A future version may model card as a buyer-side
+  payment option.
 - Mapping `INVOICE` to Peppol BIS Billing 3.0 / InvoiceNow documents.

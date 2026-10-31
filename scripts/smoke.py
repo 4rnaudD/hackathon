@@ -1,7 +1,7 @@
-"""Smoke scenario: one buyer, two banks, a card issuer, two suppliers (one double-dipping)."""
+"""Smoke scenario: one buyer, two banks, two suppliers (one double-dipping)."""
 from datetime import date, timedelta
 
-from openfloat.messages import Invoice, OfferKind
+from openfloat.messages import Invoice
 from openfloat.network import Network
 from openfloat.nodes import BuyerNode, BuyerPolicy, FunderNode, FunderPolicy, SupplierNode, SupplierProfile
 
@@ -9,9 +9,8 @@ D = date(2026, 11, 2)
 net = Network(D)
 BuyerNode("acme-buyer", net, BuyerPolicy(opening_cash=50_000_00, cash_floor=20_000_00, cash_yield=0.04,
                                          discount_apr=0.08, approval_limit=1_000_000_00), {"sup-a", "sup-b"})
-FunderNode("bank-a", net, FunderPolicy(OfferKind.FUNDER, limit=100_000_00, apr=0.055))
-FunderNode("bank-b", net, FunderPolicy(OfferKind.FUNDER, limit=100_000_00, apr=0.062))
-FunderNode("card-co", net, FunderPolicy(OfferKind.CARD, limit=100_000_00, card_fee=0.02))
+FunderNode("bank-a", net, FunderPolicy(limit=100_000_00, apr=0.055))
+FunderNode("bank-b", net, FunderPolicy(limit=100_000_00, apr=0.062))
 a = SupplierNode("sup-a", net, SupplierProfile(factoring_apr=0.30))
 b = SupplierNode("sup-b", net, SupplierProfile(factoring_apr=0.30, double_dip=True))
 

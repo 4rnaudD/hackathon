@@ -2,7 +2,7 @@
 
 All data here is SYNTHETIC. Parameter defaults are anchored to the sourced
 ranges in docs/market-context.md (SME factoring ~30-57% APR, investment-grade
-reverse factoring ~benchmark + 60-100 bps, B2B card fees ~2%).
+reverse factoring ~benchmark + 60-100 bps).
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ import random
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 
-from .messages import Invoice, OfferKind
+from .messages import Invoice
 from .network import Network
 from .nodes import (
     BuyerNode,
@@ -24,12 +24,6 @@ from .nodes import (
 )
 
 
-# Visa's published interchange for B2B virtual-card payments (October 2025 schedule), via Corpay;
-# see docs/market-context.md. Public interchange only: excludes the acquirer's markup, so the
-# supplier's real card cost is somewhat higher than this.
-PUBLIC_B2B_VIRTUAL_IC = 0.020
-
-
 @dataclass
 class ScenarioConfig:
     seed: int = 7
@@ -40,7 +34,6 @@ class ScenarioConfig:
     mean_invoice: int = 25_000_00  # cents
     terms: tuple[int, ...] = (30, 45, 60, 90)
     p_want_early: float = 0.6
-    p_accepts_card: float = 0.5
     p_double_dip: float = 0.05
     factoring_apr: tuple[float, float] = (0.20, 0.45)
     # buyer
@@ -52,12 +45,11 @@ class ScenarioConfig:
     approval_limit: int = 150_000_00
     optimiser: str = "milp"
     use_forecast: bool = True  # buyer forecasts payables it hasn't received yet
-    # funders: (id, kind, limit, apr, card_fee)
-    funders: list[tuple[str, OfferKind, int, float, float]] = field(
+    # funders: (id, limit, apr)
+    funders: list[tuple[str, int, float]] = field(
         default_factory=lambda: [
-            ("bank-a", OfferKind.FUNDER, 1_500_000_00, 0.055, 0.0),
-            ("bank-b", OfferKind.FUNDER, 1_500_000_00, 0.062, 0.0),
-            ("card-co", OfferKind.CARD, 500_000_00, 0.0, PUBLIC_B2B_VIRTUAL_IC),
+            ("bank-a", 1_500_000_00, 0.055),
+            ("bank-b", 1_500_000_00, 0.062),
         ]
     )
 
@@ -101,15 +93,14 @@ def build(cfg: ScenarioConfig) -> Scenario:
         set(sup_ids),
     )
     funders = [
-        FunderNode(fid, net, FunderPolicy(kind, limit=limit, apr=apr, card_fee=fee))
-        for fid, kind, limit, apr, fee in cfg.funders
+        FunderNode(fid, net, FunderPolicy(limit=limit, apr=apr))
+        for fid, limit, apr in cfg.funders
     ]
     suppliers = [
         SupplierNode(
             sid, net,
             SupplierProfile(
                 factoring_apr=round(rng.uniform(*cfg.factoring_apr), 3),
-                accepts_card=rng.random() < cfg.p_accepts_card,
                 double_dip=rng.random() < cfg.p_double_dip,
             ),
         )

@@ -1,4 +1,4 @@
-"""Reference OpenFloat nodes: buyer, supplier and funder (incl. card issuer).
+"""Reference OpenFloat nodes: buyer, supplier and funder.
 
 Each node only sees signed envelopes addressed to it and keeps its own state.
 Every decision is recorded with a human-readable reason for the audit trail.
@@ -299,15 +299,13 @@ class BuyerNode(Node):
         )
 
 
-# --- funder / card issuer ----------------------------------------------------
+# --- funder -------------------------------------------------------------------
 
 
 @dataclass
 class FunderPolicy:
-    kind: OfferKind  # FUNDER (priced by APR) or CARD (flat fee, T+1)
     limit: int  # max face value outstanding on any one buyer
-    apr: float = 0.0  # FUNDER: buyer-credit-based rate
-    card_fee: float = 0.0  # CARD: merchant fee as fraction of face value
+    apr: float  # priced off the buyer's credit
     min_days: int = 5
 
 
@@ -341,20 +339,15 @@ class FunderNode(Node):
         # the undertaking must be signed by the buyer it names, for the requesting supplier
         if not isinstance(u, PaymentUndertaking) or u_env.sender != u.buyer_id or self.net.directory.role(u.buyer_id) != "buyer" or u.supplier_id != env.sender:
             return self.decide(req.invoice_id, "declined: invalid payment undertaking")
-        pay = max(req.requested_date, self.net.today) + (timedelta(days=1) if self.policy.kind == OfferKind.CARD else timedelta(0))
+        pay = max(req.requested_date, self.net.today)
         days = (u.due_date - pay).days
         if days < self.policy.min_days:
             return self.decide(req.invoice_id, f"declined: tenor {days}d below minimum")
-        if self.policy.kind == OfferKind.CARD and not req.accepts_card:
-            return
         if self._committed(u.buyer_id) + u.amount > self.policy.limit:
             return self.decide(req.invoice_id, f"declined: limit on {u.buyer_id} reached")
-        if self.policy.kind == OfferKind.CARD:
-            advance = u.amount - round(u.amount * self.policy.card_fee)
-        else:
-            advance = discounted(u.amount, self.policy.apr, days)
+        advance = discounted(u.amount, self.policy.apr, days)
         offer = Offer(
-            invoice_id=req.invoice_id, invoice_hash=u.invoice_hash, offeror_id=self.id, kind=self.policy.kind,
+            invoice_id=req.invoice_id, invoice_hash=u.invoice_hash, offeror_id=self.id, kind=OfferKind.FUNDER,
             advance=advance, pay_date=pay, expires=self.net.today, annualised_rate=apr_of(u.amount, advance, days),
         )
         self.offers[offer.offer_id] = (offer, u)
@@ -390,11 +383,10 @@ class FunderNode(Node):
             return self.decide(o.invoice_id, "ack does not match undertaking; not funding")
         self.book.append((o, u))
         self.decide(o.invoice_id, f"buyer acknowledged; funding {o.advance/100:,.2f}")
-        rail = "CARD" if self.policy.kind == OfferKind.CARD else "BANK_TRANSFER"
         self.send(
             [u.supplier_id],
             SettlementInstruction(invoice_id=o.invoice_id, payer_id=self.id, payee_id=u.supplier_id, amount=o.advance,
-                                  currency=u.currency, value_date=o.pay_date, rail=rail, reference=f"OF-{o.invoice_id}"),
+                                  currency=u.currency, value_date=o.pay_date, rail="BANK_TRANSFER", reference=f"OF-{o.invoice_id}"),
         )
 
     def _on_rejected(self, env: Envelope, rej: AssignmentRejected) -> None:
@@ -419,7 +411,6 @@ class FunderNode(Node):
 @dataclass
 class SupplierProfile:
     factoring_apr: float  # what this supplier's own factor charges (its fallback)
-    accepts_card: bool = True
     double_dip: bool = False  # adversarial: accept every funder offer (for demos/tests)
 
 
@@ -475,7 +466,7 @@ class SupplierNode(Node):
             retry = r.outcome.startswith("no offers")  # limits may have freed up since yesterday
             if r.want_early and r.undertaking and (r.outcome == "approved" or retry):
                 r.offers = []
-                req = EarlyPayRequest(invoice_id=r.invoice.invoice_id, requested_date=self.net.today, accepts_card=self.profile.accepts_card, undertaking=r.undertaking)
+                req = EarlyPayRequest(invoice_id=r.invoice.invoice_id, requested_date=self.net.today, undertaking=r.undertaking)
                 self.send([r.invoice.buyer_id, *funders], req)
                 r.outcome = "requested"
 
@@ -483,10 +474,7 @@ class SupplierNode(Node):
         for r in self.receivables.values():
             if r.outcome != "requested":
                 continue
-            valid = [
-                e for e in r.offers
-                if e.body.expires >= self.net.today and (self.profile.accepts_card or e.body.kind != OfferKind.CARD)
-            ]
+            valid = [e for e in r.offers if e.body.expires >= self.net.today]
             if not valid:
                 r.outcome = "no offers; waiting for maturity"
                 self.decide(r.invoice.invoice_id, r.outcome)

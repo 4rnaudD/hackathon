@@ -10,8 +10,6 @@ Confidence: **H** = primary/reputable source checked; **M** = trade press / vend
   - https://www.nerdwallet.com/business/loans/learn/invoice-financing
 - **Reverse factoring priced off buyer credit: ~SOFR + 60–100 bps** for investment-grade buyers (illustrative SOFR+0.85% vs supplier's own SOFR+5.50%). **L** (CTP study guide; want a bank/academic source)
   - https://open-exam-prep.com/study-guides/ctp/trade-finance-supply-chain/supply-chain-finance
-- **B2B card interchange ~2–3%**; Visa set B2B virtual-payment interchange at 2% (Oct 2025 schedule). **M**
-  - https://www.corpay.com/en-SG/resources/blog/interchange-fees-card-rebates
 
 ## Reach
 - **Global factoring > €4tn (2025)**, ~€4.04tn, +3.7% YoY (FCI via BCR, May 2026). **H/M**
@@ -22,8 +20,6 @@ Confidence: **H** = primary/reputable source checked; **M** = trade press / vend
   - https://c2fo.com/newsroom/cnbc-world-top-fintech-companies-2025/
 - **Taulia network "more than two million businesses"** (SAP acquisition release, 2022). **H**
   - https://www.businesswire.com/news/home/20220126006120/en/SAP-to-Acquire-Leading-Working-Capital-Management-Company-Taulia
-- **US commercial card purchase volume $2.23tn (2024)** (Nilson). **H**
-  - https://nilsonreport.com/articles/us-commercial-cards-amex-mastercard-and-visa-in-2024/
 - **MSME finance gap $5.7tn** formal (119 developing economies; ~$8tn incl. informal) (IFC / SME Finance Forum). **H** — check edition when citing.
   - https://www.smefinanceforum.org/news/11526737
 - **Trade finance gap $2.5tn; SME rejection rate 41%** (ADB survey, Dec 2025); ADB recommends deep-tier SCF. **H**

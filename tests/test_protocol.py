@@ -10,7 +10,6 @@ from openfloat.messages import (
     EarlyPayRequest,
     Envelope,
     Invoice,
-    OfferKind,
     PaymentUndertaking,
 )
 from openfloat.network import Network
@@ -33,8 +32,8 @@ def small_net(cash=10_000_000_00, floor=0, double_dip=False, limit=1_000_000_00)
     net = Network(D)
     buyer = BuyerNode("buyer", net, BuyerPolicy(opening_cash=cash, cash_floor=floor, cash_yield=0.04,
                                                 discount_apr=0.05, approval_limit=500_000_00), {"sup"})
-    fa = FunderNode("bank-a", net, FunderPolicy(OfferKind.FUNDER, limit=limit, apr=0.055))
-    fb = FunderNode("bank-b", net, FunderPolicy(OfferKind.FUNDER, limit=limit, apr=0.060))
+    fa = FunderNode("bank-a", net, FunderPolicy(limit=limit, apr=0.055))
+    fb = FunderNode("bank-b", net, FunderPolicy(limit=limit, apr=0.060))
     sup = SupplierNode("sup", net, SupplierProfile(factoring_apr=0.30, double_dip=double_dip))
     return net, buyer, fa, fb, sup
 

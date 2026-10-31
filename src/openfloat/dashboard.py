@@ -12,7 +12,7 @@ import altair as alt
 import pandas as pd
 import streamlit as st
 
-from openfloat.messages import Envelope, Invoice, OfferKind, SettlementInstruction
+from openfloat.messages import Envelope, Invoice, SettlementInstruction
 from openfloat.network import Network
 from openfloat.nodes import (
     BuyerNode,
@@ -22,7 +22,7 @@ from openfloat.nodes import (
     SupplierNode,
     SupplierProfile,
 )
-from openfloat.sim import PUBLIC_B2B_VIRTUAL_IC, ScenarioConfig, _baseline_path, build, evaluate
+from openfloat.sim import ScenarioConfig, _baseline_path, build, evaluate
 
 # reference palette (light): categorical slots 1-2, ink and chrome
 BLUE, ORANGE = "#2a78d6", "#eb6834"
@@ -30,7 +30,7 @@ INK, INK_2, MUTED, GRID, AXIS = "#0b0b0b", "#52514e", "#898781", "#e1e0d9", "#c3
 FONT = 'system-ui, -apple-system, "Segoe UI", sans-serif'
 
 SERIES_ACTUAL, SERIES_BASE = "With early payments", "All paid on due date"
-ROUTE_LABEL = {"BUYER_DISCOUNT": "Buyer's own cash", "FUNDER": "Bank", "CARD": "Card"}
+ROUTE_LABEL = {"BUYER_DISCOUNT": "Buyer's own cash", "FUNDER": "Bank"}
 
 st.set_page_config(page_title="OpenFloat", page_icon="◐", layout="wide")
 
@@ -52,7 +52,7 @@ def chart_theme(chart: alt.Chart) -> alt.Chart:
 
 
 def plain(text: str) -> str:
-    for code, label in {"BUYER_DISCOUNT": "buyer's own cash offer", "FUNDER": "bank offer", "CARD": "card offer"}.items():
+    for code, label in {"BUYER_DISCOUNT": "buyer's own cash offer", "FUNDER": "bank offer"}.items():
         text = text.replace(code, label)
     return text
 
@@ -133,11 +133,11 @@ STEPS = [
     ("Two suppliers invoice the buyer",
      "Supplier A and Supplier B send invoices. The buyer checks each one and replies with a **signed promise to pay** on the due date."),
     ("Suppliers ask to be paid today",
-     "Each supplier broadcasts an early-payment request with the buyer's signed promise attached. Banks and the card issuer check the signature and reply with **firm offers priced on the buyer's credit**."),
+     "Each supplier broadcasts an early-payment request with the buyer's signed promise attached. Both banks check the signature and reply with **firm offers priced on the buyer's credit**."),
     ("The buyer decides where its own cash goes",
      "The buyer's optimiser offers early payment from its own cash only where the discount beats its cash yield **and** its cash stays above the floor on every future day."),
     ("Suppliers accept, and one tries to double-finance",
-     "Each supplier takes the best offer. Supplier B also accepts the other offers, trying to finance the same invoice twice. Watch the buyer's node reject the second and third claims."),
+     "Each supplier takes the best offer. Supplier B also accepts Bank B's offer, trying to finance the same invoice twice. Watch the buyer's node reject the second claim."),
     ("Someone tampers with a message",
      "An attacker changes the amount on a payment instruction in transit. Every node verifies signatures, so the message is rejected before anyone acts on it."),
     ("Maturity",
@@ -153,9 +153,8 @@ def new_walkthrough() -> dict:
                     approval_limit=500_000_00),
         {"supplier-a", "supplier-b"},
     )
-    FunderNode("bank-a", net, FunderPolicy(OfferKind.FUNDER, limit=500_000_00, apr=0.055))
-    FunderNode("bank-b", net, FunderPolicy(OfferKind.FUNDER, limit=500_000_00, apr=0.062))
-    FunderNode("card-co", net, FunderPolicy(OfferKind.CARD, limit=500_000_00, card_fee=PUBLIC_B2B_VIRTUAL_IC))
+    FunderNode("bank-a", net, FunderPolicy(limit=500_000_00, apr=0.055))
+    FunderNode("bank-b", net, FunderPolicy(limit=500_000_00, apr=0.062))
     a = SupplierNode("supplier-a", net, SupplierProfile(factoring_apr=0.30))
     b = SupplierNode("supplier-b", net, SupplierProfile(factoring_apr=0.36, double_dip=True))
     return {"net": net, "buyer": buyer, "a": a, "b": b, "step": 0, "marks": [0], "dec_marks": [0]}
@@ -213,7 +212,7 @@ def walkthrough_tab() -> None:
     left, right = st.columns([3, 1])
     with left:
         st.subheader("How a payment gets financed, step by step")
-        st.caption("One buyer, two banks, a card issuer and two suppliers, each running its own node. "
+        st.caption("One buyer, two banks and two suppliers, each running its own node. "
                    "Every message below is a real signed envelope produced by the reference implementation.")
     with right:
         c1, c2 = st.columns(2)
@@ -299,10 +298,6 @@ def sidebar_config() -> ScenarioConfig:
         a_lim = st.slider("Bank A limit (k)", 0, 5_000, 1_500, 100)
         b_apr = st.slider("Bank B APR (%)", 2.0, 15.0, 6.2, 0.1) / 100
         b_lim = st.slider("Bank B limit (k)", 0, 5_000, 1_500, 100)
-        card_fee = st.slider("Card fee paid by supplier (%)", 0.0, 4.0, PUBLIC_B2B_VIRTUAL_IC * 100, 0.1,
-                             help="Default: Visa's published B2B virtual-card interchange (2.0%, Oct 2025 schedule). "
-                                  "Excludes the acquirer's markup, so the real supplier cost is a little higher.") / 100
-        card_lim = st.slider("Card limit (k)", 0, 2_000, 500, 50)
     with st.sidebar.expander("Suppliers"):
         p_early = st.slider("Share wanting early payment (%)", 0, 100, 60, 5) / 100
         f_lo, f_hi = st.slider("Own factoring APR range (%)", 5, 80, (20, 45), 1)
@@ -312,9 +307,8 @@ def sidebar_config() -> ScenarioConfig:
         cash_yield=cash_yield, discount_apr=disc, use_forecast=forecast, optimiser="greedy" if greedy else "milp",
         p_want_early=p_early, factoring_apr=(f_lo / 100, f_hi / 100), p_double_dip=dip,
         funders=[
-            ("bank-a", OfferKind.FUNDER, a_lim * 1000_00, a_apr, 0.0),
-            ("bank-b", OfferKind.FUNDER, b_lim * 1000_00, b_apr, 0.0),
-            ("card-co", OfferKind.CARD, card_lim * 1000_00, 0.0, card_fee),
+            ("bank-a", a_lim * 1000_00, a_apr),
+            ("bank-b", b_lim * 1000_00, b_apr),
         ],
     )
 
@@ -400,8 +394,6 @@ def overview_tab(sc, m) -> None:
         for i, (label, n, face) in enumerate(funding_sources(sc)):
             grid[i % 2].metric(label, f"{n}", money(face) + " face value", delta_color="off", delta_arrow="off",
                                help="Invoices funded early, and their total face value.")
-        if "CARD" not in m.by_route:
-            st.caption("Card never won here: at the public 2% B2B interchange, banks are cheaper unless their limits are used up.")
 
 
 def buyer_tab(sc) -> None:
@@ -429,7 +421,7 @@ def supplier_tab(sc) -> None:
     sup = st.selectbox("Supplier", [s.id for s in sc.suppliers])
     s = next(x for x in sc.suppliers if x.id == sup)
     p = s.profile
-    st.caption(f"Own factoring rate {p.factoring_apr:.1%} APR · accepts card: {'yes' if p.accepts_card else 'no'}"
+    st.caption(f"Own factoring rate {p.factoring_apr:.1%} APR"
                + (" · ⚠️ attempts double financing" if p.double_dip else ""))
     rows = []
     for r in s.receivables.values():
@@ -454,11 +446,10 @@ def supplier_tab(sc) -> None:
 
 def funder_tab(sc) -> None:
     for f in sc.funders:
-        kind = "Card issuer" if f.policy.kind == OfferKind.CARD else "Bank"
-        price = f"{f.policy.card_fee:.1%} fee (public B2B interchange)" if f.policy.kind == OfferKind.CARD else f"{f.policy.apr:.2%} APR"
+        price = f"{f.policy.apr:.2%} APR"
         funded = sum(o.advance for o, _ in f.book)
         face = sum(u.amount for _, u in f.book)
-        st.markdown(f"**{f.id}** · {kind} · {price} · limit {money(f.policy.limit)}")
+        st.markdown(f"**{f.id}** · Bank · {price} · limit {money(f.policy.limit)}")
         c = st.columns(3)
         c[0].metric("Invoices funded", len(f.book))
         c[1].metric("Advanced", money(funded))

@@ -22,7 +22,6 @@ PROTOCOL_VERSION = "openfloat/0.1"
 class OfferKind(StrEnum):
     BUYER_DISCOUNT = "BUYER_DISCOUNT"  # buyer pays early from own cash, minus a discount
     FUNDER = "FUNDER"  # funder advances now, buyer repays funder at maturity
-    CARD = "CARD"  # buyer pays by virtual card; supplier settles T+1 minus card fee
 
 
 # --- bodies -----------------------------------------------------------------
@@ -67,7 +66,6 @@ class EarlyPayRequest(BaseModel):
     type: Literal["EARLY_PAY_REQUEST"] = "EARLY_PAY_REQUEST"
     invoice_id: str
     requested_date: date
-    accepts_card: bool = True
     undertaking: "Envelope"  # signed by the buyer
 
 
@@ -119,7 +117,7 @@ class AssignmentRejected(BaseModel):
 
 
 class SettlementInstruction(BaseModel):
-    """Instruction to the payer's own rail (bank file, card API). Never moves money itself."""
+    """Instruction to the payer's own rail (bank file or API). Never moves money itself."""
 
     type: Literal["SETTLEMENT_INSTRUCTION"] = "SETTLEMENT_INSTRUCTION"
     invoice_id: str
@@ -128,7 +126,7 @@ class SettlementInstruction(BaseModel):
     amount: int
     currency: str
     value_date: date
-    rail: Literal["BANK_TRANSFER", "CARD"]
+    rail: Literal["BANK_TRANSFER"]
     reference: str
 
 

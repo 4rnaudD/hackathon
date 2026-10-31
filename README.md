@@ -3,8 +3,8 @@
 **An open protocol for financing at the payment layer.**
 
 A supplier holding an invoice its buyer has approved should be able to get paid today, at a price based on
-the *buyer's* credit, from whoever offers the cheapest money: the buyer's own cash, a bank, or a card
-issuer. OpenFloat is the open, operator-less protocol that makes this possible, plus an Apache-2.0
+the *buyer's* credit, from whoever offers the cheapest money: the buyer's own cash or a bank/funder.
+OpenFloat is the open, operator-less protocol that makes this possible, plus an Apache-2.0
 reference implementation.
 
 > Status: `openfloat/0.1` draft. Reference implementation and simulation only. No real money moves,
@@ -28,20 +28,17 @@ Sources and confidence levels: [docs/market-context.md](docs/market-context.md).
 ## How it works
 
 **The gap.** The supplier wants cash on day 0. The buyer has approved the invoice and will pay it on
-day 60. Any of three liquidity sources can fill the gap, and the supplier takes the cheapest offer.
+day 60. Either of two liquidity sources can fill the gap, and the supplier takes the cheapest offer.
 
 ```mermaid
 flowchart LR
     B["Buyer<br/>owes face value on day 60"]
     S["Supplier<br/>wants cash on day 0"]
     F["Bank or funder"]
-    C["Card issuer"]
 
     B -->|"Buyer cash: pays early,<br/>face value minus a discount"| S
     F -->|"Funder: advance on day 0"| S
-    C -->|"Card: pays T+1,<br/>face value minus card fee"| S
     B -.->|"face value on day 60"| F
-    B -.->|"face value on day 60"| C
 ```
 
 **The messages.** Happy path with two competing banks, followed by a supplier trying to finance the
@@ -95,25 +92,20 @@ flowchart TB
         SN["Supplier node"]
         BN["Buyer node"]
         FN["Bank node"]
-        CN["Card issuer node"]
     end
 
     SN <--> BN
     SN <--> FN
-    SN <--> CN
     FN <--> BN
-    CN <--> BN
     D -.->|"key lookup"| P2P
 
     subgraph RAILS["Existing payment rails"]
         BR["Buyer bank"]
         FR["Bank payment system"]
-        CR["Card issuing API"]
     end
 
     BN -->|"SETTLEMENT_INSTRUCTION"| BR
     FN -->|"SETTLEMENT_INSTRUCTION"| FR
-    CN -->|"SETTLEMENT_INSTRUCTION"| CR
 ```
 
 - **No central operator.** The buyer, who owes the money, is the natural source of truth for who gets
@@ -134,7 +126,7 @@ Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/).
 ```bash
 git clone https://github.com/4rnaudD/openfloat && cd openfloat
 uv sync
-uv run openfloat simulate            # synthetic network: 1 buyer, 25 suppliers, 2 banks, 1 card issuer
+uv run openfloat simulate            # synthetic network: 1 buyer, 25 suppliers, 2 banks
 uv run openfloat simulate --no-forecast   # see what happens when the buyer ignores its forecast
 uv run openfloat dashboard           # interactive walkthrough, network outcome and message log
 uv run pytest                        # protocol and invariant tests
@@ -143,21 +135,20 @@ uv run pytest                        # protocol and invariant tests
 ## Results on synthetic data
 
 Synthetic scenario: about 185 invoices over 30 days, 60% of suppliers wanting early payment, supplier
-factoring rates drawn from 20–45% APR, banks at 5.5% and 6.2%, card at 2.0% (Visa's published B2B virtual-card interchange; excludes acquirer markup), 5% of suppliers
-attempting to double-finance. Three seeds.
+factoring rates drawn from 20–45% APR, banks at 5.5% and 6.2%, 5% of suppliers
+attempting to double-finance. Seeds 7, 11 and 23.
 
 | Metric | Result |
 |---|---|
-| Early-payment requests financed | 107–110 of 107–110 (100%) |
-| Route mix | ~50% buyer cash, ~50% banks |
-| **Supplier financing cost vs. own factoring** | **~$19.6k vs ~$116k on ~$2.46M financed** (seed 7) |
-| Double-financing attempts | 18–24 attempted, **all blocked** |
-| Days the buyer fell below its cash floor *because of early payments* | **0–4 with forecast**, 40–55 without |
+| Early-payment requests financed | 102–112 per seed, **100%** of requests |
+| Route mix | 51–56% buyer cash, the rest banks |
+| **Supplier financing cost vs. own factoring** | **~$19.3k vs ~$110k on ~$2.45M financed** (seed 7), 82–85% lower across seeds |
+| Double-financing attempts | 0–17 per seed (depends on which suppliers draw as double-dippers), **all blocked** |
+| Days the buyer fell below its cash floor *because of early payments* | **0–1 with forecast**, 10–41 without |
 
 **Where it fails:** the buyer's payables forecast is a simple run-rate. When actual invoices exceed it,
 early payments can still push the balance under the floor for a few days. A better forecast, or a
-safety margin on the floor, would fix that. The card route never wins at the public 2% interchange, because banks
-are cheaper for any tenor under about 130 days. It only wins once bank limits are used up.
+safety margin on the floor, would fix that.
 
 All figures come from synthetic data with the stated assumptions. They are not a claim about any real
 programme.
@@ -166,8 +157,8 @@ programme.
 
 `uv run openfloat dashboard` opens a local Streamlit app with:
 
-- **Walkthrough:** one buyer, two banks, a card issuer and two suppliers exchange real signed messages step
-  by step. One supplier tries to finance the same invoice three times, and a message is tampered with in
+- **Walkthrough:** one buyer, two banks and two suppliers exchange real signed messages step
+  by step. One supplier tries to finance the same invoice twice, and a message is tampered with in
   transit. Both are rejected.
 - **Network outcome:** the synthetic network's results, the buyer's cash balance against its floor, and
   who funded early payments. Every parameter can be changed from the sidebar.
@@ -195,7 +186,7 @@ docs/market-context.md     sourced market figures
 - Plain-language offer explanations for suppliers (LLM-assisted, never deciding)
 - Dilution (credit notes, disputes), partial financing, term-extension guardrails
 - Mapping invoices to Peppol BIS Billing 3.0 / InvoiceNow
-- Real card-rail semantics
+- Card payments as a buyer-side payment option (pay by card now, settle on the card statement), not a funder
 
 ## License
 
