@@ -6,6 +6,7 @@ Every decision is recorded with a human-readable reason for the audit trail.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from enum import StrEnum
@@ -93,6 +94,8 @@ class BuyerPolicy:
     approval_limit: int  # invoices above this need manual approval (rejected here)
     daily_inflows: dict[date, int] = field(default_factory=dict)
     optimiser: str = "milp"
+    # expected outflow on `day` from invoices not yet received as of `as_of` (treasury forecast)
+    payables_forecast: Callable[[date, date], int] | None = None
 
 
 class BuyerNode(Node):
@@ -203,7 +206,11 @@ class BuyerNode(Node):
             reserved[o.pay_date] = reserved.get(o.pay_date, 0) + o.advance
             due = self.payables[o.invoice_id].invoice.due_date
             reserved[due] = reserved.get(due, 0) - o.advance
-        baseline = self.balance_path(today, self.horizon_end(), reserved)
+        end = self.horizon_end()
+        if self.policy.payables_forecast:
+            for d in date_range(today, end):
+                reserved[d] = reserved.get(d, 0) + self.policy.payables_forecast(today, d)
+        baseline = self.balance_path(today, end, reserved)
         for d, c in zip(choose_self_funded(cands, baseline, self.policy.cash_floor, self.policy.cash_yield, self.policy.optimiser), cands):
             if not d.fund:
                 self.decide(d.invoice_id, f"no own-cash offer: {d.reason}")
@@ -264,7 +271,7 @@ class BuyerNode(Node):
         if p.status == InvStatus.ASSIGNED:
             return reject(f"DOUBLE FINANCING: already assigned to {p.payee}")
         if p.status == InvStatus.PAID_EARLY:
-            return reject("invoice already paid early by buyer")
+            return reject("DOUBLE FINANCING: invoice already paid early by buyer")
         if p.status != InvStatus.APPROVED:
             return reject(f"invoice is {p.status}")
         p.status, p.payee = InvStatus.ASSIGNED, note.new_payee_id
@@ -311,7 +318,7 @@ class FunderNode(Node):
         super().__init__(node_id, net)
         self.policy = policy
         self.exposure: dict[str, int] = {}  # buyer -> face value outstanding (incl. pending)
-        self.offers: dict[str, tuple[Offer, PaymentUndertaking]] = {}
+        self.offers: dict[str, tuple[Offer, PaymentUndertaking]] = {}  # firm offers: reserve limit until expiry
         self.pending: dict[str, tuple[Offer, PaymentUndertaking]] = {}  # invoice -> awaiting buyer ack
         self.book: list[tuple[Offer, PaymentUndertaking]] = []  # funded deals
 
@@ -340,7 +347,7 @@ class FunderNode(Node):
             return self.decide(req.invoice_id, f"declined: tenor {days}d below minimum")
         if self.policy.kind == OfferKind.CARD and not req.accepts_card:
             return
-        if self.exposure.get(u.buyer_id, 0) + u.amount > self.policy.limit:
+        if self._committed(u.buyer_id) + u.amount > self.policy.limit:
             return self.decide(req.invoice_id, f"declined: limit on {u.buyer_id} reached")
         if self.policy.kind == OfferKind.CARD:
             advance = u.amount - round(u.amount * self.policy.card_fee)
@@ -354,6 +361,12 @@ class FunderNode(Node):
         self.decide(req.invoice_id, f"offered {advance/100:,.2f} on {pay} ({offer.annualised_rate:.2%} APR)")
         self.send([env.sender], offer)
 
+    def _committed(self, buyer_id: str) -> int:
+        """Exposure plus limit reserved by live offers; expired offers are dropped."""
+        self.offers = {k: (o, u) for k, (o, u) in self.offers.items() if o.expires >= self.net.today}
+        reserved = sum(u.amount for o, u in self.offers.values() if u.buyer_id == buyer_id)
+        return self.exposure.get(buyer_id, 0) + reserved
+
     def _on_accept(self, env: Envelope, acc: Accept) -> None:
         offer = acc.offer.body
         if acc.offer.sender != self.id or offer.offer_id not in self.offers:
@@ -361,7 +374,7 @@ class FunderNode(Node):
         o, u = self.offers.pop(offer.offer_id)
         if env.sender != u.supplier_id or o.expires < self.net.today:
             return self.decide(o.invoice_id, "acceptance ignored: wrong sender or expired")
-        if self.exposure.get(u.buyer_id, 0) + u.amount > self.policy.limit:
+        if self._committed(u.buyer_id) + u.amount > self.policy.limit:  # defensive: offer was reserved
             return self.decide(o.invoice_id, "acceptance declined: limit reached since offer")
         self.exposure[u.buyer_id] = self.exposure.get(u.buyer_id, 0) + u.amount
         self.pending[o.invoice_id] = (o, u)
@@ -459,7 +472,9 @@ class SupplierNode(Node):
     def request_early_pay(self) -> None:
         funders = self.net.directory.nodes_with_role("funder")
         for r in self.receivables.values():
-            if r.want_early and r.undertaking and not r.offers and r.outcome == "approved":
+            retry = r.outcome.startswith("no offers")  # limits may have freed up since yesterday
+            if r.want_early and r.undertaking and (r.outcome == "approved" or retry):
+                r.offers = []
                 req = EarlyPayRequest(invoice_id=r.invoice.invoice_id, requested_date=self.net.today, accepts_card=self.profile.accepts_card, undertaking=r.undertaking)
                 self.send([r.invoice.buyer_id, *funders], req)
                 r.outcome = "requested"
